@@ -5,7 +5,7 @@ import com.mrcrayfish.guns.init.ModEntities;
 import com.mrcrayfish.guns.interfaces.IProjectileFactory;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,7 +40,7 @@ public class ProjectileManager
      */
     public void registerFactory(Item ammo, IProjectileFactory factory)
     {
-        this.projectileFactoryMap.put(ForgeRegistries.ITEMS.getKey(ammo), factory);
+        this.projectileFactoryMap.put(BuiltInRegistries.ITEM.getKey(ammo), factory);
     }
 
     /**

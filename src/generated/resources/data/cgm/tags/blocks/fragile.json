@@ -1,8 +1,18 @@
 {
+  "replace": false,
   "values": [
-    "#forge:glass_panes",
-    "#forge:glass",
-    "#minecraft:candles",
+    {
+      "id": "#c:glass_panes",
+      "required": false
+    },
+    {
+      "id": "#c:glass_blocks",
+      "required": false
+    },
+    {
+      "id": "#minecraft:candles",
+      "required": false
+    },
     "minecraft:lily_pad",
     "minecraft:cocoa",
     "minecraft:end_rod",

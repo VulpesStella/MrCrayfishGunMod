@@ -2,7 +2,7 @@ package com.mrcrayfish.guns.compat;
 
 import com.mrcrayfish.framework.api.network.LevelLocation;
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.common.Gun;
 import com.mrcrayfish.guns.common.ProjectileManager;
 import com.mrcrayfish.guns.entity.ProjectileEntity;
@@ -33,7 +33,7 @@ public class SimplePlanesHelper {
     public static void init() {
         try {
             Class.forName("xyz.przemyk.simpleplanes.compat.MrCrayfishGunCompat");
-            GunMod.LOGGER.info("Simple Planes' CGM compat detected, disabling our unofficial one...");
+            FabricGunMod.LOGGER.info("Simple Planes' CGM compat detected, disabling our unofficial one...");
             return;
         } catch (ClassNotFoundException ignored) {
         }

@@ -65,7 +65,7 @@ public class InventoryUtil
         }
         else
         {
-            return (source.getTag() == null || source.getTag().equals(target.getTag())) && source.areCapsCompatible(target);
+            return source.getTag() == null || source.getTag().equals(target.getTag()); // Fabric: no capabilities
         }
     }
 

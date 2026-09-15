@@ -5,7 +5,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:gems/amethyst"
+            "items": [
+              "minecraft:amethyst_shard"
+            ]
           }
         ]
       },
@@ -15,7 +17,7 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:dyes/black"
+            "tag": "c:black_dyes"
           }
         ]
       },
@@ -25,7 +27,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/iron"
+            "items": [
+              "minecraft:iron_nugget"
+            ]
           }
         ]
       },
@@ -50,5 +54,6 @@
     "recipes": [
       "cgm:long_scope"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

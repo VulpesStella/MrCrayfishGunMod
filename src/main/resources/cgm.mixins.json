@@ -1,16 +1,17 @@
 {
   "required": true,
   "package": "com.mrcrayfish.guns.mixin",
-  "compatibilityLevel": "JAVA_8",
+  "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
-  "refmap": "cgm.refmap.json",
-  "plugin": "com.mrcrayfish.guns.mixin.MixinPlugin",
   "mixins": [
     "common.EndPortalBlockMixin",
     "common.LayeredCauldronBlockMixin",
     "common.LivingEntityMixin",
-    "common.SittingPhaseMixin",
-    "common.simpleplanes.ShooterUpgradeMixin"
+    "common.MilkBucketItemMixin",
+    "common.EnchantmentHelperMixin",
+    "common.EnchantmentMixin",
+    "common.MobTargetMixin",
+    "common.SittingPhaseMixin"
   ],
   "client": [
     "client.GameRendererMixin",
@@ -18,6 +19,11 @@
     "client.LevelRendererMixin",
     "client.MinecraftMixin",
     "client.MouseHandlerMixin",
+    "client.SoundEngineMixin",
+    "client.GuiMixin",
+    "client.ItemInHandRendererMixin",
+    "client.PlayerRendererMixin",
+    "client.CameraMixin",
     "client.PlayerModelMixin"
   ],
   "injectors": {

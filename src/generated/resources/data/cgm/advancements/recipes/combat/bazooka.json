@@ -5,7 +5,7 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:ingots/iron"
+            "tag": "c:iron_ingots"
           }
         ]
       },
@@ -41,5 +41,6 @@
     "recipes": [
       "cgm:bazooka"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

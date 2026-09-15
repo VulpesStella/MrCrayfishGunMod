@@ -18,7 +18,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraftforge.network.NetworkHooks;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -72,9 +71,9 @@ public class WorkbenchBlock extends RotatedObjectBlock implements EntityBlock
         if(!world.isClientSide())
         {
             BlockEntity tileEntity = world.getBlockEntity(pos);
-            if(tileEntity instanceof MenuProvider)
+            if(tileEntity instanceof MenuProvider menuProvider)
             {
-                NetworkHooks.openScreen((ServerPlayer) playerEntity, (MenuProvider) tileEntity, pos);
+                playerEntity.openMenu(menuProvider);
             }
         }
         return InteractionResult.SUCCESS;

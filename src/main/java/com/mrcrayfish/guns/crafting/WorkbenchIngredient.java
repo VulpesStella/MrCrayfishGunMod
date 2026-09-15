@@ -1,6 +1,5 @@
 package com.mrcrayfish.guns.crafting;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -10,31 +9,26 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.ItemLike;
-import net.minecraftforge.common.crafting.IIngredientSerializer;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.stream.Stream;
 
 /**
+ * Fabric port: vanilla 1.20.1 {@link Ingredient} exposes no extension point (fields
+ * are private and subclassing is not possible), so this ingredient is now a
+ * composition of a vanilla {@link Ingredient} plus a stack {@link #count}, exactly
+ * as specified by plan.md T07. Item matching is delegated to the wrapped
+ * ingredient; count handling stays with the caller (InventoryUtil sums matched
+ * stacks and compares against {@link #getCount()}).
+ *
  * Author: MrCrayfish
  */
-public class WorkbenchIngredient extends Ingredient
+public class WorkbenchIngredient
 {
-    private final Value itemList;
+    private final Ingredient ingredient;
     private final int count;
 
-    protected WorkbenchIngredient(Stream<? extends Value> itemList, int count)
+    WorkbenchIngredient(Ingredient ingredient, int count)
     {
-        super(itemList);
-        this.itemList = null;
-        this.count = count;
-    }
-
-    private WorkbenchIngredient(Value itemList, int count)
-    {
-        super(Stream.of(itemList));
-        this.itemList = itemList;
+        if(count <= 0) throw new IllegalArgumentException("Workbench ingredient count must be positive");
+        this.ingredient = ingredient;
         this.count = count;
     }
 
@@ -43,105 +37,59 @@ public class WorkbenchIngredient extends Ingredient
         return this.count;
     }
 
-    @Override
-    public IIngredientSerializer<? extends Ingredient> getSerializer()
+    public Ingredient getIngredient()
     {
-        return Serializer.INSTANCE;
+        return this.ingredient;
     }
 
-    public static WorkbenchIngredient fromJson(JsonObject object)
+    /**
+     * Item-match only; the caller accumulates stack counts against {@link #getCount()}.
+     */
+    public boolean test(ItemStack stack)
     {
-        Ingredient.Value value = valueFromJson(object);
-        int count = GsonHelper.getAsInt(object, "count", 1);
-        return new WorkbenchIngredient(Stream.of(value), count);
+        return this.ingredient.test(stack);
     }
 
-    @Override
-    public JsonElement toJson()
+    public ItemStack[] getItems()
     {
-        JsonObject object = this.itemList.serialize();
+        return this.ingredient.getItems();
+    }
+
+    /**
+     * Mirrors the baseline serialization: {item|tag, count} - the count key is always
+     * written (baseline pistol.json carries "count": 14).
+     */
+    public com.google.gson.JsonObject toJson()
+    {
+        JsonObject object = this.ingredient.toJson().getAsJsonObject();
         object.addProperty("count", this.count);
         return object;
     }
 
-    public static WorkbenchIngredient of(ItemLike provider, int count)
+    public static WorkbenchIngredient fromJson(JsonObject object)
     {
-        return new WorkbenchIngredient(new Ingredient.ItemValue(new ItemStack(provider)), count);
+        // Vanilla Ingredient.fromJson ignores the extra "count" key
+        return new WorkbenchIngredient(Ingredient.fromJson(object), GsonHelper.getAsInt(object, "count", 1));
     }
 
-    public static WorkbenchIngredient of(ItemStack stack, int count)
+    public static WorkbenchIngredient of(ItemLike item, int count)
     {
-        return new WorkbenchIngredient(new Ingredient.ItemValue(stack), count);
+        return new WorkbenchIngredient(Ingredient.of(item), count);
     }
 
     public static WorkbenchIngredient of(TagKey<Item> tag, int count)
     {
-        return new WorkbenchIngredient(new Ingredient.TagValue(tag), count);
-    }
-
-    public static WorkbenchIngredient of(ResourceLocation id, int count)
-    {
-        return new WorkbenchIngredient(new UnknownValue(id), count);
-    }
-
-    public static class Serializer implements IIngredientSerializer<WorkbenchIngredient>
-    {
-        public static final WorkbenchIngredient.Serializer INSTANCE = new WorkbenchIngredient.Serializer();
-
-        @Override
-        public WorkbenchIngredient parse(FriendlyByteBuf buffer)
-        {
-            int itemCount = buffer.readVarInt();
-            int count = buffer.readVarInt();
-            Stream<Ingredient.ItemValue> values = Stream.generate(() -> new ItemValue(buffer.readItem())).limit(itemCount);
-            return new WorkbenchIngredient(values, count);
-        }
-
-        @Override
-        public WorkbenchIngredient parse(JsonObject object)
-        {
-            return WorkbenchIngredient.fromJson(object);
-        }
-
-        @Override
-        public void write(FriendlyByteBuf buffer, WorkbenchIngredient ingredient)
-        {
-            buffer.writeVarInt(ingredient.getItems().length);
-            buffer.writeVarInt(ingredient.count);
-            for(ItemStack stack : ingredient.getItems())
-            {
-                buffer.writeItem(stack);
-            }
-        }
+        return new WorkbenchIngredient(Ingredient.of(tag), count);
     }
 
     /**
-     * Allows ability to define an ingredient from another mod without adding it as a dependency in
-     * the development environment. Serializes the data to be read by the regular
-     * {@link ItemValue}. Only use this for generating data.
+     * Datagen-only reference to a third-party item that is not registered in this
+     * environment (baseline {@code UnknownValue}). Vanilla Ingredient cannot express
+     * an unregistered item, so this matches nothing at runtime - the same behavior
+     * the baseline UnknownValue had (its item list was empty).
      */
-    @SuppressWarnings("ClassCanBeRecord")
-    public static class UnknownValue implements Ingredient.Value
+    public static WorkbenchIngredient of(ResourceLocation id, int count)
     {
-        private final ResourceLocation id;
-
-        public UnknownValue(ResourceLocation id)
-        {
-            this.id = id;
-        }
-
-        @Override
-        public Collection<ItemStack> getItems()
-        {
-            return Collections.emptyList();
-        }
-
-        @Override
-        public JsonObject serialize()
-        {
-            JsonObject object = new JsonObject();
-            object.addProperty("item", this.id.toString());
-            return object;
-        }
+        return new WorkbenchIngredient(Ingredient.EMPTY, count);
     }
 }

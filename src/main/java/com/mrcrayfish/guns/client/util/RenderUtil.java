@@ -5,13 +5,16 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.mojang.math.MatrixUtil;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
+import net.minecraft.client.color.item.ItemColor;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
@@ -31,7 +34,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HalfTransparentBlock;
 import net.minecraft.world.level.block.StainedGlassPaneBlock;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -123,7 +125,7 @@ public class RenderUtil
                 }
             }
 
-            model = model.applyTransform(display, poseStack, false);
+            model.getTransforms().getTransform(display).apply(false, poseStack);
             poseStack.translate(-0.5D, -0.5D, -0.5D);
             if(!model.isCustomRenderer() && (stack.getItem() != Items.TRIDENT || flag))
             {
@@ -173,7 +175,13 @@ public class RenderUtil
             }
             else
             {
-                IClientItemExtensions.of(stack).getCustomRenderer().renderByItem(stack, display, poseStack, buffer, light, overlay);
+                // Fabric port: Forge used IClientItemExtensions#getCustomRenderer here. Vanilla
+                // 1.20.1 routes isCustomRenderer() models through the vanilla
+                // BlockEntityWithoutLevelRenderer (as vanilla ItemRenderer does), which covers
+                // the vanilla BEWLR items; CGM's own custom gun models go through
+                // ModelOverrides, not this path.
+                BlockEntityWithoutLevelRenderer blockEntityRenderer = new BlockEntityWithoutLevelRenderer(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
+                blockEntityRenderer.renderByItem(stack, display, poseStack, buffer, light, overlay);
             }
 
             poseStack.popPose();
@@ -184,7 +192,9 @@ public class RenderUtil
     {
         poseStack.pushPose();
         BakedModel model = Minecraft.getInstance().getItemRenderer().getItemModelShaper().getItemModel(child);
-        model = net.minecraftforge.client.ForgeHooksClient.handleCameraTransforms(poseStack, model, display, false);
+        // Fabric port: ForgeHooksClient.handleCameraTransforms is the Forge wrapper, the vanilla
+        // equivalent is BakedModel#applyTransform
+        model.getTransforms().getTransform(display).apply(false, poseStack);
         poseStack.translate(-0.5D, -0.5D, -0.5D);
         renderItemWithoutTransforms(model, child, parent, poseStack, buffer, light, overlay);
         poseStack.popPose();
@@ -239,7 +249,12 @@ public class RenderUtil
 
     public static int getItemStackColor(ItemStack stack, ItemStack parent, int tintIndex)
     {
-        int color = Minecraft.getInstance().getItemColors().getColor(stack, tintIndex);
+        // Fabric port: vanilla 1.20.1 does not expose Minecraft#getItemColors (Forge patched the
+        // getter in). ColorProviderRegistry.ITEM#get resolves the provider through the real
+        // vanilla ItemColors instance, so vanilla colors and colors registered via
+        // ColorProviderRegistry.ITEM both resolve; -1 matches ItemColors for unregistered items.
+        ItemColor itemColor = ColorProviderRegistry.ITEM.get(stack.getItem());
+        int color = itemColor != null ? itemColor.getColor(stack, tintIndex) : -1;
         if(color == -1)
         {
             if(!parent.isEmpty())
@@ -256,7 +271,7 @@ public class RenderUtil
         boolean leftHanded = display == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || display == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
 
         //TODO test
-        model = model.applyTransform(display, poseStack, leftHanded);
+        model.getTransforms().getTransform(display).apply(leftHanded, poseStack);
 
         /* Flips the model and normals if left handed. */
         if(leftHanded)

@@ -6,11 +6,6 @@ import com.mrcrayfish.guns.item.attachment.IAttachment;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.event.entity.player.ItemTooltipEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +15,6 @@ import java.util.List;
  *
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID, value = Dist.CLIENT)
 public abstract class Attachment
 {
     protected IGunModifier[] modifiers;
@@ -49,20 +43,17 @@ public abstract class Attachment
         return this.perks;
     }
 
-    /* Determines the perks of attachments and caches them */
-    @OnlyIn(Dist.CLIENT)
-    @SubscribeEvent
-    public static void addInformationEvent(ItemTooltipEvent event)
+    /* Determines the perks of attachments and caches them (invoked client-side via ItemTooltipCallback) */
+    public static void addInformation(ItemStack stack, List<Component> tooltip)
     {
-        ItemStack stack = event.getItemStack();
         if(stack.getItem() instanceof IAttachment<?>)
         {
             IAttachment<?> attachment = (IAttachment<?>) stack.getItem();
             List<Component> perks = attachment.getProperties().getPerks();
             if(perks != null && perks.size() > 0)
             {
-                event.getToolTip().add(Component.translatable("perk.cgm.title").withStyle(ChatFormatting.GRAY, ChatFormatting.BOLD));
-                event.getToolTip().addAll(perks);
+                tooltip.add(Component.translatable("perk.cgm.title").withStyle(ChatFormatting.GRAY, ChatFormatting.BOLD));
+                tooltip.addAll(perks);
                 return;
             }
 
@@ -243,8 +234,8 @@ public abstract class Attachment
             attachment.getProperties().setPerks(positivePerks);
             if(positivePerks.size() > 0)
             {
-                event.getToolTip().add(Component.translatable("perk.cgm.title").withStyle(ChatFormatting.GRAY, ChatFormatting.BOLD));
-                event.getToolTip().addAll(positivePerks);
+                tooltip.add(Component.translatable("perk.cgm.title").withStyle(ChatFormatting.GRAY, ChatFormatting.BOLD));
+                tooltip.addAll(positivePerks);
             }
         }
     }

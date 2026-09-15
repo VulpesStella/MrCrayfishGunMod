@@ -12,10 +12,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import org.apache.commons.lang3.Validate;
 
 import java.util.Map;
@@ -24,7 +22,7 @@ import java.util.Optional;
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID, value = Dist.CLIENT)
+@Environment(EnvType.CLIENT)
 public class CustomGunManager
 {
     private static Map<ResourceLocation, CustomGun> customGunMap;
@@ -58,8 +56,7 @@ public class CustomGunManager
         }
     }
 
-    @SubscribeEvent
-    public static void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event)
+    public static void onClientDisconnect()
     {
         customGunMap = null;
     }

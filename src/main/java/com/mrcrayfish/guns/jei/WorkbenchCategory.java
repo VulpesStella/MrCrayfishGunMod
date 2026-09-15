@@ -1,7 +1,6 @@
 package com.mrcrayfish.guns.jei;
 
 import com.mojang.blaze3d.platform.Lighting;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mrcrayfish.guns.Reference;
@@ -33,7 +32,7 @@ import net.minecraft.world.item.DyeItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.awt.*;
 import java.util.stream.Collectors;
@@ -64,7 +63,7 @@ public class WorkbenchCategory implements IRecipeCategory<WorkbenchRecipe> {
         this.dyeSlot = helper.createDrawable(BACKGROUND, 7, 101, 18, 18);
         this.icon = helper.createDrawableIngredient(VanillaTypes.ITEM_STACK, new ItemStack(ModBlocks.WORKBENCH.get()));
         this.title = Component.translatable(TITLE_KEY);
-        this.dyes = ForgeRegistries.ITEMS.getValues().stream().filter(item -> item instanceof DyeItem).toArray(Item[]::new);
+        this.dyes = BuiltInRegistries.ITEM.stream().filter(item -> item instanceof DyeItem).toArray(Item[]::new);
     }
 
     @Override
@@ -94,7 +93,13 @@ public class WorkbenchCategory implements IRecipeCategory<WorkbenchRecipe> {
             builder.addSlot(RecipeIngredientRole.INPUT, 141, 52).addItemStacks(Stream.of(this.dyes).map(ItemStack::new).collect(Collectors.toList()));
         }
         for (int i = 0; i < recipe.getMaterials().size(); i++) {
-            builder.addSlot(RecipeIngredientRole.INPUT, (i % 8) * 18 + 1, 88 + (i / 8) * 18).addIngredients(recipe.getMaterials().get(i));
+            var material = recipe.getMaterials().get(i);
+            builder.addSlot(RecipeIngredientRole.INPUT, (i % 8) * 18 + 1, 88 + (i / 8) * 18)
+                    .addItemStacks(Stream.of(material.getItems()).map(item -> {
+                        ItemStack copy = item.copy();
+                        copy.setCount(material.getCount());
+                        return copy;
+                    }).collect(Collectors.toList()));
         }
         builder.addInvisibleIngredients(RecipeIngredientRole.OUTPUT).addItemStack(output);
     }
@@ -117,26 +122,30 @@ public class WorkbenchCategory implements IRecipeCategory<WorkbenchRecipe> {
         int titleX = this.window.getWidth() / 2;
         graphics.drawCenteredString(Minecraft.getInstance().font, displayName, titleX, 5, Color.WHITE.getRGB());
 
-        PoseStack stack = RenderSystem.getModelViewStack();
+        // Submit the GUI before drawing the preview in front of its background.
+        graphics.flush();
+        PoseStack stack = graphics.pose();
         stack.pushPose();
+        try
         {
-            stack.mulPoseMatrix(graphics.pose().last().pose());
-            stack.translate(81, 40, 0);
+            stack.translate(81, 40, 150);
             stack.scale(40F, 40F, 40F);
             stack.mulPose(Axis.XP.rotationDegrees(-5F));
             float partialTicks = Minecraft.getInstance().getFrameTime();
             stack.mulPose(Axis.YP.rotationDegrees(Minecraft.getInstance().player.tickCount + partialTicks));
             stack.scale(-1, -1, -1);
-            RenderSystem.applyModelViewMatrix();
 
             BakedModel model = RenderUtil.getModel(output);
             Lighting.setupFor3DItems();
 
-            MultiBufferSource.BufferSource buffer = Minecraft.getInstance().renderBuffers().bufferSource();
-            Minecraft.getInstance().getItemRenderer().render(output, ItemDisplayContext.FIXED, false, new PoseStack(), buffer, 15728880, OverlayTexture.NO_OVERLAY, model);
+            MultiBufferSource.BufferSource buffer = graphics.bufferSource();
+            Minecraft.getInstance().getItemRenderer().render(output, ItemDisplayContext.FIXED, false, stack, buffer, 15728880, OverlayTexture.NO_OVERLAY, model);
             buffer.endBatch();
         }
-        stack.popPose();
-        RenderSystem.applyModelViewMatrix();
+        finally
+        {
+            stack.popPose();
+            Lighting.setupFor3DItems();
+        }
     }
 }

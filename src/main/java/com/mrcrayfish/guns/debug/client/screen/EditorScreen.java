@@ -157,7 +157,7 @@ public class EditorScreen extends Screen
         @Override
         protected int getScrollbarPosition()
         {
-            return this.getLeft() + this.width - 6;
+            return this.getRowLeft() + this.width - 6;
         }
 
         @Override
@@ -192,10 +192,16 @@ public class EditorScreen extends Screen
             this.widget = widget;
         }
 
+        private int lastTop, lastLeft, lastWidth, lastHeight;
+
         @Override
         public void render(GuiGraphics graphics, int index, int top, int left, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTicks)
         {
-            graphics.drawString(EditorScreen.this.getMinecraft().font, this.label, left + 5, top, 0xFFFFFF);
+            this.lastTop = top;
+            this.lastLeft = left;
+            this.lastWidth = rowWidth;
+            this.lastHeight = rowHeight;
+            graphics.drawString(net.minecraft.client.Minecraft.getInstance().font, this.label, left + 5, top, 0xFFFFFF);
             this.widget.setX(left);
             this.widget.setY(top + 10);
             this.widget.setWidth(rowWidth);
@@ -217,7 +223,7 @@ public class EditorScreen extends Screen
         @Override
         public boolean isMouseOver(double mouseX, double mouseY)
         {
-            return ScreenUtil.isMouseWithin(EditorScreen.this.list.getRowLeft(), EditorScreen.this.list.getTop(), EditorScreen.this.list.getRowWidth(), EditorScreen.this.list.getHeight(), (int) mouseX, (int) mouseY) && super.isMouseOver(mouseX, mouseY);
+            return ScreenUtil.isMouseWithin(this.lastLeft, this.lastTop, this.lastWidth, this.lastHeight, (int) mouseX, (int) mouseY) && super.isMouseOver(mouseX, mouseY);
         }
     }
 }

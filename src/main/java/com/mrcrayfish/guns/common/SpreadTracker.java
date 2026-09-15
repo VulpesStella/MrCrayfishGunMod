@@ -4,11 +4,9 @@ import com.mrcrayfish.guns.Config;
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.init.ModSyncedDataKeys;
 import com.mrcrayfish.guns.item.GunItem;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.world.entity.player.Player;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.commons.lang3.mutable.MutableLong;
 import org.apache.commons.lang3.tuple.Pair;
@@ -20,7 +18,6 @@ import java.util.WeakHashMap;
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID)
 public class SpreadTracker
 {
     private static final Map<Player, SpreadTracker> TRACKER_MAP = new WeakHashMap<>();
@@ -71,13 +68,11 @@ public class SpreadTracker
         return TRACKER_MAP.computeIfAbsent(player, player1 -> new SpreadTracker());
     }
 
-    @SubscribeEvent
-    public static void onPlayerDisconnect(PlayerEvent.PlayerLoggedOutEvent event)
+    public static void register()
     {
-        MinecraftServer server = event.getEntity().getServer();
-        if(server != null)
-        {
-            server.execute(() -> TRACKER_MAP.remove(event.getEntity()));
-        }
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayer player = handler.player;
+            server.execute(() -> TRACKER_MAP.remove(player));
+        });
     }
 }

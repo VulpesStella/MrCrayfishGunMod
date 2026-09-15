@@ -1,14 +1,9 @@
 package com.mrcrayfish.guns.common;
 
 import com.mrcrayfish.guns.Reference;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.common.util.LogicalSidedProvider;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -18,40 +13,40 @@ import java.util.List;
  * A simple system to run synchronized delayed tasks. See {@link #runAfter(int, Runnable)} to add
  * a delayed task.
  * <p>
+ * Fabric port: server reference is tracked via lifecycle events (Forge used
+ * LogicalSidedProvider). Tasks run on END_SERVER_TICK, matching the baseline
+ * Phase.END behavior. The server instance is cleared on stop so a restarted
+ * server never reuses stale tasks.
+ * <p>
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID)
 public class DelayedTask
 {
+    private static MinecraftServer currentServer = null;
     public static List<Impl> tasks = new ArrayList<>();
 
-    @SubscribeEvent
-    public static void onServerStart(ServerStartedEvent event)
+    public static void register()
     {
-        tasks.clear();
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> tasks.clear());
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> tasks.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            tasks.clear();
+            currentServer = null;
+        });
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> currentServer = server);
+        ServerTickEvents.END_SERVER_TICK.register(DelayedTask::onServerTick);
     }
 
-    @SubscribeEvent
-    public static void onServerStopping(ServerStoppingEvent event)
+    private static void onServerTick(MinecraftServer server)
     {
-        tasks.clear();
-    }
-
-    @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent event)
-    {
-        if(event.phase != TickEvent.Phase.START)
+        Iterator<Impl> it = tasks.iterator();
+        while (it.hasNext())
         {
-            MinecraftServer server = (MinecraftServer) LogicalSidedProvider.WORKQUEUE.get(LogicalSide.SERVER);
-            Iterator<Impl> it = tasks.iterator();
-            while(it.hasNext())
+            Impl impl = it.next();
+            if (impl.executionTick <= server.getTickCount())
             {
-                Impl impl = it.next();
-                if(impl.executionTick <= server.getTickCount())
-                {
-                    impl.runnable.run();
-                    it.remove();
-                }
+                impl.runnable.run();
+                it.remove();
             }
         }
     }
@@ -64,12 +59,15 @@ public class DelayedTask
      */
     public static void runAfter(int ticks, Runnable run)
     {
-        MinecraftServer server = (MinecraftServer) LogicalSidedProvider.WORKQUEUE.get(LogicalSide.SERVER);
-        if(!server.isSameThread())
+        if (currentServer == null)
+        {
+            throw new IllegalStateException("Tried to add a delayed task without a running server");
+        }
+        if (!currentServer.isSameThread())
         {
             throw new IllegalStateException("Tried to add a delayed task off the main thread");
         }
-        tasks.add(new Impl(server.getTickCount() + ticks, run));
+        tasks.add(new Impl(currentServer.getTickCount() + ticks, run));
     }
 
     private static class Impl

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "cgm",
+  "version": "${version}",
+  "name": "MrCrayfish's Gun Mod",
+  "description": "MrCrayfish's Gun Mod adds in simple and straight forward weapons into Minecraft. They can be configured with many different attachments to add extra stats to your weapon and coloured to your personal liking.",
+  "authors": [
+    "MrCrayfish"
+  ],
+  "contact": {
+    "homepage": "https://mrcrayfish.com/",
+    "sources": "https://github.com/MrCrayfish/MrCrayfishGunMod"
+  },
+  "license": "GPL-3.0",
+  "icon": "cgm_icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "jei_mod_plugin": [
+      "com.mrcrayfish.guns.jei.GunModPlugin"
+    ],
+    "main": [
+      "com.mrcrayfish.guns.FabricGunMod"
+    ],
+    "client": [
+      "com.mrcrayfish.guns.client.FabricClientSetup"
+    ],
+    "fabric-datagen": [
+      "com.mrcrayfish.guns.datagen.FabricDatagenEntry"
+    ]
+  },
+  "accessWidener": "cgm.accesswidener",
+  "mixins": [
+    "cgm.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "fabric-api": "*",
+    "minecraft": "1.20.1",
+    "java": ">=17",
+    "framework": "0.8.0",
+    "forgeconfigapiport": "8.0.3"
+  }
+}

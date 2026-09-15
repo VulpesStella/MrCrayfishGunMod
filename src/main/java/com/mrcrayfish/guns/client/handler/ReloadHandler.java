@@ -9,16 +9,12 @@ import com.mrcrayfish.guns.network.PacketHandler;
 import com.mrcrayfish.guns.network.message.C2SMessageReload;
 import com.mrcrayfish.guns.network.message.C2SMessageUnload;
 import com.mrcrayfish.guns.util.GunEnchantmentHelper;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Author: MrCrayfish
@@ -45,12 +41,21 @@ public class ReloadHandler
     {
     }
 
-    @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event)
+    /**
+     * Fabric port: registers the Fabric event hooks that replaced the Forge
+     * {@code @SubscribeEvent} handlers (Forge: {@code MinecraftForge.EVENT_BUS.register(this)}).
+     */
+    public static void register()
     {
-        if(event.phase != TickEvent.Phase.END)
-            return;
+        // Forge: TickEvent.ClientTickEvent(Phase.END)
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            ReloadHandler.get().handleKeys(mc);
+            ReloadHandler.get().onClientTick();
+        });
+    }
 
+    void onClientTick()
+    {
         this.prevReloadTimer = this.reloadTimer;
 
         Player player = Minecraft.getInstance().player;
@@ -68,21 +73,21 @@ public class ReloadHandler
         }
     }
 
-    @SubscribeEvent
-    public void onKeyPressed(InputEvent.Key event)
+    private void handleKeys(Minecraft client)
     {
-        Player player = Minecraft.getInstance().player;
-        if(player == null)
-            return;
-
-        if(KeyBinds.KEY_RELOAD.isDown() && event.getAction() == GLFW.GLFW_PRESS)
+        boolean active = client.player != null && client.screen == null && client.isWindowActive();
+        while(KeyBinds.KEY_RELOAD.consumeClick())
         {
-            this.setReloading(!ModSyncedDataKeys.RELOADING.getValue(player));
+            if(active)
+                this.setReloading(!ModSyncedDataKeys.RELOADING.getValue(client.player));
         }
-        if(KeyBinds.KEY_UNLOAD.consumeClick() && event.getAction() == GLFW.GLFW_PRESS)
+        while(KeyBinds.KEY_UNLOAD.consumeClick())
         {
-            this.setReloading(false);
-            PacketHandler.getPlayChannel().sendToServer(new C2SMessageUnload());
+            if(active)
+            {
+                this.setReloading(false);
+                PacketHandler.getPlayChannel().sendToServer(new C2SMessageUnload());
+            }
         }
     }
 
@@ -102,12 +107,12 @@ public class ReloadHandler
                         Gun gun = ((GunItem) stack.getItem()).getModifiedGun(stack);
                         if(tag.getInt("AmmoCount") >= GunEnchantmentHelper.getAmmoCapacity(stack, gun))
                             return;
-                        if(MinecraftForge.EVENT_BUS.post(new GunReloadEvent.Pre(player, stack)))
+                        if(GunReloadEvent.firePre(player, stack))
                             return;
                         ModSyncedDataKeys.RELOADING.setValue(player, true);
                         PacketHandler.getPlayChannel().sendToServer(new C2SMessageReload(true));
                         this.reloadingSlot = player.getInventory().selected;
-                        MinecraftForge.EVENT_BUS.post(new GunReloadEvent.Post(player, stack));
+                        GunReloadEvent.firePost(player, stack);
                     }
                 }
             }

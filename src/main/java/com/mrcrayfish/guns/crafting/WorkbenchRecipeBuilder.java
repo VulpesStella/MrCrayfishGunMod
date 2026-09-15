@@ -14,9 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.level.ItemLike;
-import net.minecraftforge.common.crafting.CraftingHelper;
-import net.minecraftforge.common.crafting.conditions.ICondition;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -35,7 +33,6 @@ public class WorkbenchRecipeBuilder
     private final int count;
     private final List<WorkbenchIngredient> ingredients;
     private final Advancement.Builder advancementBuilder;
-    private final List<ICondition> conditions = new ArrayList<>();
 
     private WorkbenchRecipeBuilder(@Nullable RecipeCategory category, ItemLike item, int count)
     {
@@ -84,15 +81,9 @@ public class WorkbenchRecipeBuilder
         return this;
     }
 
-    public WorkbenchRecipeBuilder addCondition(ICondition condition)
-    {
-        this.conditions.add(condition);
-        return this;
-    }
-
     public void build(Consumer<FinishedRecipe> consumer)
     {
-        ResourceLocation resourcelocation = ForgeRegistries.ITEMS.getKey(this.result);
+        ResourceLocation resourcelocation = BuiltInRegistries.ITEM.getKey(this.result);
         this.build(consumer, resourcelocation);
     }
 
@@ -100,7 +91,7 @@ public class WorkbenchRecipeBuilder
     {
         this.validate(id);
         this.advancementBuilder.parent(new ResourceLocation("recipes/root")).addCriterion("has_the_recipe", RecipeUnlockedTrigger.unlocked(id)).rewards(AdvancementRewards.Builder.recipe(id)).requirements(RequirementsStrategy.OR);
-        consumer.accept(new WorkbenchRecipeBuilder.Result(id, this.result, this.count, this.ingredients, this.conditions, this.advancementBuilder, new ResourceLocation(id.getNamespace(), "recipes/" + (this.category != null ? this.category.getFolderName() : "") + "/" + id.getPath())));
+        consumer.accept(new WorkbenchRecipeBuilder.Result(id, this.result, this.count, this.ingredients, this.advancementBuilder, new ResourceLocation(id.getNamespace(), "recipes/" + (this.category != null ? this.category.getFolderName() : "") + "/" + id.getPath())));
     }
 
     /**
@@ -120,17 +111,15 @@ public class WorkbenchRecipeBuilder
         private final Item item;
         private final int count;
         private final List<WorkbenchIngredient> ingredients;
-        private final List<ICondition> conditions;
         private final Advancement.Builder advancement;
         private final ResourceLocation advancementId;
 
-        public Result(ResourceLocation id, ItemLike item, int count, List<WorkbenchIngredient> ingredients, List<ICondition> conditions, Advancement.Builder advancement, ResourceLocation advancementId)
+        public Result(ResourceLocation id, ItemLike item, int count, List<WorkbenchIngredient> ingredients, Advancement.Builder advancement, ResourceLocation advancementId)
         {
             this.id = id;
             this.item = item.asItem();
             this.count = count;
             this.ingredients = ingredients;
-            this.conditions = conditions;
             this.advancement = advancement;
             this.advancementId = advancementId;
         }
@@ -138,19 +127,14 @@ public class WorkbenchRecipeBuilder
         @Override
         public void serializeRecipeData(JsonObject json)
         {
-            JsonArray conditions = new JsonArray();
-            this.conditions.forEach(condition -> conditions.add(CraftingHelper.serialize(condition)));
-            if(conditions.size() > 0)
-            {
-                json.add("conditions", conditions);
-            }
-
+            // Fabric port: forge:conditions serialization dropped (no condition system on
+            // Fabric 1.20.1; resource conditions are a T10+ decision if ever needed)
             JsonArray materials = new JsonArray();
             this.ingredients.forEach(ingredient -> materials.add(ingredient.toJson()));
             json.add("materials", materials);
 
             JsonObject resultObject = new JsonObject();
-            resultObject.addProperty("item", Objects.requireNonNull(ForgeRegistries.ITEMS.getKey(this.item)).toString());
+            resultObject.addProperty("item", Objects.requireNonNull(BuiltInRegistries.ITEM.getKey(this.item)).toString());
             if(this.count > 1)
             {
                 resultObject.addProperty("count", this.count);

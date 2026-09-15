@@ -5,7 +5,6 @@ import com.mrcrayfish.guns.client.handler.GunRenderingHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
@@ -22,21 +21,26 @@ public class GunItemStackRenderer extends BlockEntityWithoutLevelRenderer
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext display, PoseStack poseStack, MultiBufferSource source, int light, int overlay)
     {
-        // Hack to remove transforms created by ItemRenderer#render
+        // Fabric invokes this inside ItemRenderer#render's pushed frame, after
+        // applying the display transform and (-0.5, -0.5, -0.5) translation.
+        // renderWeapon applies its own display transform, so start at the parent.
         poseStack.popPose();
 
         poseStack.pushPose();
+        try
         {
             Minecraft mc = Minecraft.getInstance();
             if(display == ItemDisplayContext.GROUND)
             {
                 GunRenderingHandler.get().applyWeaponScale(stack, poseStack);
             }
-            GunRenderingHandler.get().renderWeapon(mc.player, stack, display, poseStack, source, light, Minecraft.getInstance().getDeltaFrameTime());
+            GunRenderingHandler.get().renderWeapon(mc.player, stack, display, poseStack, source, light, mc.getFrameTime());
         }
-        poseStack.popPose();
-
-        // Push the stack again since we popped the pose prior
-        poseStack.pushPose();
+        finally
+        {
+            poseStack.popPose();
+            // Restore the frame depth expected by ItemRenderer's final pop.
+            poseStack.pushPose();
+        }
     }
 }

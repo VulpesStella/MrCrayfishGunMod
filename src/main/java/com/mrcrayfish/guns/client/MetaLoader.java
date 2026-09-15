@@ -7,9 +7,9 @@ import com.mrcrayfish.guns.item.IMeta;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenCustomHashMap;
 import net.minecraft.Util;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
@@ -17,6 +17,12 @@ import java.util.List;
 
 /**
  * Author: MrCrayfish
+ *
+ * <p>Fabric port note: this loader is registered through the Framework client API
+ * ({@code FrameworkClientAPI.registerDataLoader}, see FabricClientSetup), which performs the
+ * actual .cgmmeta resource loading. The baseline never subscribed to a Forge reload event here,
+ * so no additional Fabric reload listener is needed; only the Forge registry lookup was
+ * replaced with {@link BuiltInRegistries#ITEM}.</p>
  */
 public final class MetaLoader implements IDataLoader<MetaLoader.ItemResource>
 {
@@ -44,9 +50,9 @@ public final class MetaLoader implements IDataLoader<MetaLoader.ItemResource>
     public List<ItemResource> getResourceSuppliers()
     {
         List<ItemResource> resources = new ArrayList<>();
-        ForgeRegistries.ITEMS.getValues().stream().filter(item -> item instanceof IMeta).forEach(item ->
+        BuiltInRegistries.ITEM.stream().filter(item -> item instanceof IMeta).forEach(item ->
         {
-            ResourceLocation key = item.builtInRegistryHolder().key().location();
+            ResourceLocation key = BuiltInRegistries.ITEM.getKey(item);
             ResourceLocation location = new ResourceLocation(key.getNamespace(), "models/item/" + key.getPath() + ".cgmmeta");
             resources.add(new ItemResource(item, location));
         });

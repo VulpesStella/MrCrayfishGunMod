@@ -43,9 +43,6 @@ public class ScopeItem extends AttachmentItem implements IScope, IColored
         return this.colored;
     }
 
-    @Override
-    public boolean canApplyAtEnchantingTable(ItemStack stack, Enchantment enchantment)
-    {
-        return enchantment == Enchantments.BINDING_CURSE || super.canApplyAtEnchantingTable(stack, enchantment);
-    }
+    // Fabric port: Forge canApplyAtEnchantingTable does not exist on vanilla Item;
+    // TODO(T08): binding-curse applicability moves into the enchantment hooks per plan.
 }

@@ -1,0 +1,10 @@
+accessWidener v2 named
+# SoundHandler: read the engine's playing sounds map (baseline used SRG f_120226_)
+accessible field net/minecraft/client/sounds/SoundEngine instanceToChannel Ljava/util/Map;
+# Fabric port of PlaySoundEvent.getEngine(): reach the engine from SoundManager
+accessible field net/minecraft/client/sounds/SoundManager soundEngine Lnet/minecraft/client/sounds/SoundEngine;
+# GunRenderingHandler equip progress (baseline SRG f_109302_ / f_109303_)
+accessible field net/minecraft/client/renderer/ItemInHandRenderer mainHandHeight F
+accessible field net/minecraft/client/renderer/ItemInHandRenderer oMainHandHeight F
+# ReflectionUtil: TargetBlock redstone update (baseline SRG m_57391_)
+accessible method net/minecraft/world/level/block/TargetBlock updateRedstoneOutput (Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/phys/BlockHitResult;Lnet/minecraft/world/entity/Entity;)I

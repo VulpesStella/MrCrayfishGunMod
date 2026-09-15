@@ -5,7 +5,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:dusts/glowstone"
+            "items": [
+              "minecraft:glowstone_dust"
+            ]
           }
         ]
       },
@@ -15,7 +17,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:gunpowder"
+            "items": [
+              "minecraft:gunpowder"
+            ]
           }
         ]
       },
@@ -25,7 +29,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/iron"
+            "items": [
+              "minecraft:iron_nugget"
+            ]
           }
         ]
       },
@@ -50,5 +56,6 @@
     "recipes": [
       "cgm:stun_grenade"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

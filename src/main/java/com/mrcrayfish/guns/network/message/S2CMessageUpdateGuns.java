@@ -10,7 +10,6 @@ import com.mrcrayfish.guns.common.Gun;
 import com.mrcrayfish.guns.common.NetworkGunManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.network.NetworkEvent;
 import org.apache.commons.lang3.Validate;
 
 import java.util.function.Supplier;

@@ -6,7 +6,7 @@
       "item": "minecraft:light_gray_concrete"
     },
     "I": {
-      "tag": "forge:ingots/iron"
+      "tag": "c:iron_ingots"
     }
   },
   "pattern": [

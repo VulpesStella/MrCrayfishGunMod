@@ -1,6 +1,5 @@
 package com.mrcrayfish.guns.client;
 
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -49,6 +48,12 @@ public class GunModel implements BakedModel
     }
 
     @Override
+    public net.minecraft.client.renderer.block.model.ItemTransforms getTransforms()
+    {
+        return this.model.getTransforms();
+    }
+
+    @Override
     public boolean usesBlockLight()
     {
         return this.model.usesBlockLight();
@@ -78,9 +83,4 @@ public class GunModel implements BakedModel
         return INSTANCE;
     }
 
-    @Override
-    public List<RenderType> getRenderTypes(ItemStack itemStack, boolean fabulous)
-    {
-        return List.of(RenderType.entityTranslucent(InventoryMenu.BLOCK_ATLAS));
-    }
 }

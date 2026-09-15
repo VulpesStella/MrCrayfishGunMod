@@ -1,7 +1,7 @@
 package com.mrcrayfish.guns.client.handler;
 
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.client.KeyBinds;
 import com.mrcrayfish.guns.common.GripType;
 import com.mrcrayfish.guns.common.Gun;
@@ -19,11 +19,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemCooldowns;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
  * Author: MrCrayfish
@@ -57,70 +52,98 @@ public class ShootingHandler
         return mc.isWindowActive();
     }
 
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public void onMouseClick(InputEvent.InteractionKeyMappingTriggered event)
+    /**
+     * Fabric port of the InputEvent.InteractionKeyMappingTriggered attack branch.
+     * Called from MinecraftMixin#startAttack/continueAttack. Returns true when the
+     * vanilla attack/swing must be canceled because the gun fires instead.
+     */
+    public boolean onAttackClick()
     {
-        if(event.isCanceled())
-            return;
-
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if(player == null)
-            return;
+            return false;
 
         if(PlayerReviveHelper.isBleeding(player))
-            return;
+            return false;
 
-        if(Config.CLIENT.controls.flipControls.get() ? event.isUseItem() : event.isAttack())
+        if(Config.CLIENT.controls.flipControls.get() && player.getMainHandItem().getItem() instanceof GunItem)
+            return true;
+
+        if(!Config.CLIENT.controls.flipControls.get())
         {
             ItemStack heldItem = player.getMainHandItem();
             if(heldItem.getItem() instanceof GunItem gunItem)
             {
-                event.setSwingHand(false);
-                event.setCanceled(true);
                 this.fire(player, heldItem);
                 Gun gun = gunItem.getModifiedGun(heldItem);
                 if(!gun.getGeneral().isAuto())
                 {
                     KeyBinds.getShootMapping().setDown(false);
                 }
+                return true;
             }
         }
-        else if(Config.CLIENT.controls.flipControls.get() ? event.isAttack() : event.isUseItem())
+        return false;
+    }
+
+    /**
+     * Fabric port of the use-item branch. Called from MinecraftMixin#startUseItem.
+     * Returns true when vanilla use behavior must be canceled while holding a gun.
+     */
+    public boolean onUseClick()
+    {
+        Minecraft mc = Minecraft.getInstance();
+        Player player = mc.player;
+        if(player == null)
+            return false;
+
+        if(PlayerReviveHelper.isBleeding(player))
+            return false;
+
+        if(Config.CLIENT.controls.flipControls.get())
         {
             ItemStack heldItem = player.getMainHandItem();
             if(heldItem.getItem() instanceof GunItem gunItem)
             {
-                if(event.getHand() == InteractionHand.OFF_HAND)
+                this.fire(player, heldItem);
+                Gun gun = gunItem.getModifiedGun(heldItem);
+                if(!gun.getGeneral().isAuto())
                 {
-                    // Allow shields to be used if weapon is one-handed
-                    if(player.getOffhandItem().getItem() == Items.SHIELD)
-                    {
-                        Gun modifiedGun = gunItem.getModifiedGun(heldItem);
-                        if(modifiedGun.getGeneral().getGripType() == GripType.ONE_HANDED)
-                        {
-                            return;
-                        }
-                    }
-                    event.setCanceled(true);
-                    event.setSwingHand(false);
-                    return;
+                    KeyBinds.getShootMapping().setDown(false);
                 }
-                if(Config.CLIENT.controls.flipControls.get() || AimingHandler.get().isZooming() && AimingHandler.get().isLookingAtInteractableBlock())
+                return true;
+            }
+            return false;
+        }
+
+        ItemStack heldItem = player.getMainHandItem();
+        if(heldItem.getItem() instanceof GunItem gunItem)
+        {
+            if(!AimingHandler.get().isZooming() && AimingHandler.get().isLookingAtInteractableBlock())
+                return false;
+            // Allow shields to be used if weapon is one-handed
+            if(player.getOffhandItem().getItem() == Items.SHIELD)
+            {
+                Gun modifiedGun = gunItem.getModifiedGun(heldItem);
+                if(modifiedGun.getGeneral().getGripType() == GripType.ONE_HANDED)
                 {
-                    event.setCanceled(true);
-                    event.setSwingHand(false);
+                    return false;
                 }
             }
+            return true;
         }
+        return false;
     }
 
-    @SubscribeEvent
-    public void onHandleShooting(TickEvent.ClientTickEvent event)
+    public void register()
     {
-        if(event.phase != TickEvent.Phase.START)
-            return;
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.START_CLIENT_TICK.register(mc -> this.onHandleShooting());
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(mc -> this.onPostClientTick());
+    }
 
+    public void onHandleShooting()
+    {
         if(!this.isInGame())
             return;
 
@@ -132,9 +155,10 @@ public class ShootingHandler
             if(heldItem.getItem() instanceof GunItem && (Gun.hasAmmo(heldItem) || player.isCreative()) && !PlayerReviveHelper.isBleeding(player))
             {
                 boolean shooting = KeyBinds.getShootMapping().isDown();
-                if(GunMod.controllableLoaded)
+                if(FabricGunMod.controllableLoaded)
                 {
-                    shooting |= ControllerHandler.isShooting();
+                    // TODO(T11): Controllable controller shooting hook (T11).
+                    shooting |= false;
                 }
                 if(shooting)
                 {
@@ -162,11 +186,8 @@ public class ShootingHandler
         }
     }
 
-    @SubscribeEvent
-    public void onPostClientTick(TickEvent.ClientTickEvent event)
+    public void onPostClientTick()
     {
-        if(event.phase != TickEvent.Phase.END)
-            return;
 
         if(!isInGame())
             return;
@@ -213,7 +234,7 @@ public class ShootingHandler
             GunItem gunItem = (GunItem) heldItem.getItem();
             Gun modifiedGun = gunItem.getModifiedGun(heldItem);
 
-            if(MinecraftForge.EVENT_BUS.post(new GunFireEvent.Pre(player, heldItem)))
+            if(GunFireEvent.firePre(player, heldItem))
                 return;
 
             int rate = GunEnchantmentHelper.getRate(heldItem, modifiedGun);
@@ -221,7 +242,7 @@ public class ShootingHandler
             tracker.addCooldown(heldItem.getItem(), rate);
             PacketHandler.getPlayChannel().sendToServer(new C2SMessageShoot(player));
 
-            MinecraftForge.EVENT_BUS.post(new GunFireEvent.Post(player, heldItem));
+            GunFireEvent.firePost(player, heldItem);
         }
     }
 }

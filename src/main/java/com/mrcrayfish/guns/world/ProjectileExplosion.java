@@ -110,7 +110,8 @@ public class ProjectileExplosion extends Explosion
 
         List<Entity> entities = this.world.getEntities(this.exploder, new AABB((double) minX, (double) minY, (double) minZ, (double) maxX, (double) maxY, (double) maxZ));
 
-        net.minecraftforge.event.ForgeEventFactory.onExplosionDetonate(this.world, this, entities, radius);
+        // TODO(T08): Forge fired an explosion-detonate hook here; Fabric 1.20.1 has no
+        // equivalent - verify explosion entity handling in T08.
 
         Vec3 explosionPos = new Vec3(this.x, this.y, this.z);
         for(Entity entity : entities)

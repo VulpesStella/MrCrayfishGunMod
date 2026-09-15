@@ -5,7 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mrcrayfish.framework.api.data.login.ILoginData;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.annotation.Validator;
 import com.mrcrayfish.guns.client.util.Easings;
@@ -20,13 +20,14 @@ import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.event.OnDatapackSyncEvent;
-import net.minecraftforge.event.server.ServerStoppedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.packs.PackType;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import org.apache.commons.lang3.Validate;
 
 import javax.annotation.Nullable;
@@ -47,7 +48,6 @@ import java.util.Optional;
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID)
 public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunItem, Gun>>
 {
     private static final int FILE_TYPE_LENGTH_VALUE = ".json".length();
@@ -69,9 +69,9 @@ public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunIte
     protected Map<GunItem, Gun> prepare(ResourceManager manager, ProfilerFiller profiler)
     {
         Map<GunItem, Gun> map = new HashMap<>();
-        ForgeRegistries.ITEMS.getValues().stream().filter(item -> item instanceof GunItem).forEach(item ->
+        BuiltInRegistries.ITEM.stream().filter(item -> item instanceof GunItem).forEach(item ->
         {
-            ResourceLocation id = ForgeRegistries.ITEMS.getKey(item);
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
             if(id != null)
             {
                 List<ResourceLocation> resources = new ArrayList<>(manager.listResources("guns", (fileName) -> fileName.getPath().endsWith(id.getPath() + ".json")).keySet());
@@ -103,18 +103,18 @@ public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunIte
                             }
                             else
                             {
-                                GunMod.LOGGER.error("Couldn't load data file {} as it is missing or malformed. Using default gun data", resourceLocation);
+                                FabricGunMod.LOGGER.error("Couldn't load data file {} as it is missing or malformed. Using default gun data", resourceLocation);
                                 map.putIfAbsent((GunItem) item, new Gun());
                             }
                         }
                         catch(InvalidObjectException e)
                         {
-                            GunMod.LOGGER.error("Missing required properties for {}", resourceLocation);
+                            FabricGunMod.LOGGER.error("Missing required properties for {}", resourceLocation);
                             e.printStackTrace();
                         }
                         catch(IOException e)
                         {
-                            GunMod.LOGGER.error("Couldn't parse data file {}", resourceLocation);
+                            FabricGunMod.LOGGER.error("Couldn't parse data file {}", resourceLocation);
                         }
                         catch(IllegalAccessException e)
                         {
@@ -132,7 +132,7 @@ public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunIte
     {
         ImmutableMap.Builder<ResourceLocation, Gun> builder = ImmutableMap.builder();
         objects.forEach((item, gun) -> {
-            builder.put(Objects.requireNonNull(ForgeRegistries.ITEMS.getKey(item)), gun);
+            builder.put(Objects.requireNonNull(BuiltInRegistries.ITEM.getKey(item)), gun);
             item.setGun(new Supplier(gun));
         });
         this.registeredGuns = builder.build();
@@ -192,7 +192,7 @@ public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunIte
         {
             for(Map.Entry<ResourceLocation, Gun> entry : registeredGuns.entrySet())
             {
-                Item item = ForgeRegistries.ITEMS.getValue(entry.getKey());
+                Item item = BuiltInRegistries.ITEM.get(entry.getKey());
                 if(!(item instanceof GunItem))
                 {
                     return false;
@@ -225,27 +225,37 @@ public class NetworkGunManager extends SimplePreparableReloadListener<Map<GunIte
         return ImmutableList.copyOf(clientRegisteredGuns);
     }
 
-    @SubscribeEvent
-    public static void onServerStopped(ServerStoppedEvent event)
+    /**
+     * Fabric port: registered once from FabricGunMod. A fresh NetworkGunManager is
+     * created per data reload (same as Forge AddReloadListenerEvent creating a new
+     * listener per reload). Fabric invokes SYNC_DATA_PACK_CONTENTS once per player;
+     * joined=false identifies reload synchronization, not initial login.
+     */
+    public static void register()
     {
-        NetworkGunManager.instance = null;
-    }
-
-    @SubscribeEvent
-    public static void addReloadListenerEvent(AddReloadListenerEvent event)
-    {
-        NetworkGunManager networkGunManager = new NetworkGunManager();
-        event.addListener(networkGunManager);
-        NetworkGunManager.instance = networkGunManager;
-    }
-
-    @SubscribeEvent
-    public static void onDatapackSync(OnDatapackSyncEvent event)
-    {
-        if(event.getPlayer() == null)
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> NetworkGunManager.instance = null);
+        ServerLifecycleEvents.SYNC_DATA_PACK_CONTENTS.register((player, joined) -> {
+            if(!joined)
+            {
+                PacketHandler.getPlayChannel().sendToPlayer(() -> player, new S2CMessageUpdateGuns());
+            }
+        });
+        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(new IdentifiableResourceReloadListener()
         {
-            PacketHandler.getPlayChannel().sendToAll(new S2CMessageUpdateGuns());
-        }
+            @Override
+            public ResourceLocation getFabricId()
+            {
+                return new ResourceLocation(Reference.MOD_ID, "network_gun_manager");
+            }
+
+            @Override
+            public CompletableFuture<Void> reload(PreparationBarrier preparationBarrier, ResourceManager resourceManager, ProfilerFiller prepareProfiler, ProfilerFiller applyProfiler, Executor prepareExecutor, Executor applyExecutor)
+            {
+                NetworkGunManager networkGunManager = new NetworkGunManager();
+                NetworkGunManager.instance = networkGunManager;
+                return networkGunManager.reload(preparationBarrier, resourceManager, prepareProfiler, applyProfiler, prepareExecutor, applyExecutor);
+            }
+        });
     }
 
     /**

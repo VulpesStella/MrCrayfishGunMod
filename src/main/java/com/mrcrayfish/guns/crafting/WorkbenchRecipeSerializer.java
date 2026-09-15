@@ -15,6 +15,11 @@ import net.minecraft.world.item.crafting.ShapedRecipe;
 import javax.annotation.Nullable;
 
 /**
+ * Fabric port: ingredient network serialization is handled here directly (Forge's
+ * CraftingHelper ingredient serializers do not exist). Read/write order is strictly
+ * mirrored: result item, material count, then per material the vanilla ingredient
+ * followed by the stack count.
+ *
  * Author: MrCrayfish
  */
 public class WorkbenchRecipeSerializer implements RecipeSerializer<WorkbenchRecipe>
@@ -47,7 +52,9 @@ public class WorkbenchRecipeSerializer implements RecipeSerializer<WorkbenchReci
         int size = buffer.readVarInt();
         for(int i = 0; i < size; i++)
         {
-            builder.add((WorkbenchIngredient) Ingredient.fromNetwork(buffer));
+            Ingredient inner = Ingredient.fromNetwork(buffer);
+            int count = buffer.readVarInt();
+            builder.add(new WorkbenchIngredient(inner, count));
         }
         return new WorkbenchRecipe(recipeId, result, builder.build());
     }
@@ -59,7 +66,8 @@ public class WorkbenchRecipeSerializer implements RecipeSerializer<WorkbenchReci
         buffer.writeVarInt(recipe.getMaterials().size());
         for(WorkbenchIngredient ingredient : recipe.getMaterials())
         {
-            ingredient.toNetwork(buffer);
+            ingredient.getIngredient().toNetwork(buffer);
+            buffer.writeVarInt(ingredient.getCount());
         }
     }
 }

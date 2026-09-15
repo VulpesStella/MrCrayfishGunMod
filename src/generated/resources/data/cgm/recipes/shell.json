@@ -7,11 +7,11 @@
     },
     {
       "count": 1,
-      "tag": "forge:nuggets/gold"
+      "item": "minecraft:gold_nugget"
     },
     {
       "count": 1,
-      "tag": "forge:gunpowder"
+      "item": "minecraft:gunpowder"
     }
   ],
   "result": {

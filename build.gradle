@@ -1,133 +1,148 @@
 plugins {
-    id 'eclipse'
+    id 'fabric-loom' version '1.11.8'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '5.1.+'
-    id 'org.spongepowered.mixin' version '0.7.+'
-    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
 
-archivesBaseName = archive_base_name
-version = "${mod_version}+Forge+${minecraft_version}"
-group = "com.mrcrayfish.cgm.forge"
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
-    config "${mod_id}.mixins.json"
+base {
+    archivesName = archive_base_name
 }
 
-minecraft {
-    mappings channel: mappings_channel, version: mappings_version
+version = "${mod_version}+Fabric+${minecraft_version}"
+group = "com.mrcrayfish.cgm.fabric"
 
-    runs {
-        client {
-            workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            mods {
-                cgm {
-                    source sourceSets.main
-                }
-            }
-        }
-
-        server {
-            workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            arg "-mixin.config=${mod_id}.mixins.json"
-            mods {
-                cgm {
-                    source sourceSets.main
-                }
-            }
-        }
-
-        data {
-            workingDirectory project.file('run')
-            property 'mixin.env.disableRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
-            property 'forge.logging.console.level', 'debug'
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/')
-            arg '-mixin.config=${mod_id}.mixins.json'
-            mods {
-                cgm {
-                    source sourceSets.main
-                }
-            }
-        }
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
 }
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+    exclude '.cache/**'
+}
+
+// T11 isolation (plan.md): Controllable/compat/jei adapters are excluded from the
+// core compile until their Fabric 1.20.1 counterparts are verified in T11.
+def excludeT11Compat = { org.gradle.api.file.SourceDirectorySet it ->
+    it.exclude 'com/mrcrayfish/guns/mixin/common/simpleplanes/**'
+    it.exclude 'com/mrcrayfish/guns/compat/SimplePlanesHelper.java'
+    it.exclude 'com/mrcrayfish/guns/client/handler/ControllerHandler.java'
+    it.exclude 'com/mrcrayfish/guns/client/GunButtonBindings.java'
+}
+excludeT11Compat(sourceSets.main.java)
 
 repositories {
-    mavenLocal()
     maven {
-        url = "https://maven.theillusivec4.top/"
+        name = 'Fabric'
+        url = 'https://maven.fabricmc.net/'
     }
-    maven {
-        url "https://www.cursemaven.com"
-    }
-    maven {
-        name = "ModMaven"
-        url = "https://modmaven.dev"
+    mavenCentral()
+    flatDir {
+        dirs 'libs'
     }
 }
 
 dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 
-    runtimeOnly fg.deobf("top.theillusivec4.curios:curios-forge:${project.curios_version}")
-    compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${project.curios_version}:api")
+    // javax.annotation (@Nullable etc.), previously provided transitively by Forge
+    compileOnly "com.google.code.findbugs:jsr305:3.0.2"
 
-    implementation fg.deobf("curse.maven:framework-549225:${framework_file_id}")
-    implementation fg.deobf("curse.maven:configured-457570:${configured_file_id}")
-    implementation fg.deobf("curse.maven:catalogue-459701:${catalogue_file_id}")
-    implementation fg.deobf("curse.maven:backpacked-352835:${backpacked_file_id}")
-    compileOnly fg.deobf("curse.maven:simple-planes-388908:${simple_planes_file_id}")
-    implementation fg.deobf("curse.maven:recruits-523860:${recruits_file_id}")
-    implementation fg.deobf("curse.maven:sophisticated-core-618298:${sop_core_file_id}")
-    implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:${sop_backpacks_file_id}")
-    implementation fg.deobf("curse.maven:travelers-backpack-321117:${travelers_backpack_file_id}")
-    implementation fg.deobf("curse.maven:l2library-620203:${l2_lib_file_id}")
-    implementation fg.deobf("curse.maven:l2-backpack-620229:${l2_backpack_file_id}")
-    compileOnly fg.deobf("curse.maven:controllable-317269:${controllable_file_id}")
-    compileOnly fg.deobf("mezz.jei:jei-1.20.1-common-api:${jei_version}")
-    compileOnly fg.deobf("mezz.jei:jei-1.20.1-forge-api:${jei_version}")
-    runtimeOnly fg.deobf("mezz.jei:jei-1.20.1-forge:${jei_version}")
-    annotationProcessor('org.spongepowered:mixin:0.8.5:processor')
+    // Third-party jars without a reachable Maven from the build network.
+    // Run fetch-libs.cmd (core) / fetch-compat-libs.cmd (core + red-line targets)
+    // to download and SHA-256 verify them. Exact filenames only, never a glob.
+    modImplementation "framework:framework:${framework_version}"
+    modImplementation "forgeconfigapiport:forgeconfigapiport:${forge_config_api_port_version}"
 
-    // For compatibility test
-    compileOnly fg.deobf("curse.maven:creativecore-257814:${creativecore_file_id}")
-    compileOnly fg.deobf("curse.maven:cmdcam-251244:${cmdcam_file_id}")
+    // Red-line compatibility targets: compile-only. They must never become a hard
+    // dependency of CGM and must never be packaged into the release jar; each is
+    // guarded at runtime by a FabricGunMod.*Loaded flag.
+    modCompileOnly files(
+            'libs/backpacked-fabric-1.20.1-3.0.9-signed.jar',
+            'libs/travelersbackpack-fabric-1.20.1-9.1.52.jar',
+            'libs/sophisticatedbackpacks-1.20.1-3.23.4.5.110.jar',
+            'libs/sophisticatedcore-1.20.1-1.2.7.15.166.jar',
+            'libs/jei-15.20.0.134.jar',
+            'libs/cmdcam-2.1.3.jar'
+    )
+
+    // Sophisticated Core ships its porting_lib modules as jar-in-jar. Loom does not
+    // put a dependency mod's nested jars on the compile classpath, but CGM's
+    // Sophisticated adapter references InventoryHandler, whose supertypes live in
+    // porting_lib transfer and porting_lib core. Compile-only again; production gets
+    // them from Core's own JIJ, so they must not be listed as separate combo mods.
+    modCompileOnly files(
+            'libs/nested-transfer/transfer-2.3.2+1.20.1.jar',
+            'libs/nested-dev/porting_lib_core-2.3.2+1.20.1.jar'
+    )
+
+    // Cardinal Components ships its submodules as jar-in-jar too. Traveler's Backpack's
+    // ComponentUtils implements Cardinal's EntityComponentInitializer, so the adapter needs
+    // that supertype at compile time. Extracted by scripts/extract-nested-dev.ps1.
+    modCompileOnly files(
+            'libs/nested-dev/cardinal-components-base-5.2.3.jar',
+            'libs/nested-dev/cardinal-components-entity-5.2.3.jar'
+    )
+
+    // Framework nests these as JIJ; Loom dev does not load nested jars of
+    // dependency mods, so provide them on the runtime classpath ourselves.
+    modRuntimeOnly files(
+            'libs/nested/core-3.6.6.jar',
+            'libs/nested/toml-3.6.6.jar',
+            'libs/nested/javassist-3.29.2-GA.jar',
+            'libs/nested/reflections-0.10.2.jar'
+    )
+
 }
 
-jar {
-    manifest {
-        attributes([
-            "Specification-Title": "Gun Mod",
-            "Specification-Vendor": "MrCrayfish",
-            "Specification-Version": "1",
-            "Implementation-Title": "Gun Mod",
-            "Implementation-Version": "${mod_version}",
-            "Implementation-Vendor" : "MrCrayfish",
-            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-            "MixinConfigs": "${mod_id}.mixins.json"
-        ])
+loom {
+    mixin {
+        // Remap injection selectors in the release jar, not only @Mixin class values.
+        useLegacyMixinAp = false
+    }
+    accessWidenerPath = file('src/main/resources/cgm.accesswidener')
+    runs {
+        client {
+            runDir "run/fabric-1.20.1/client-a"
+        }
+        clientB {
+            inherit client
+            name "Client B"
+            runDir "run/fabric-1.20.1/client-b"
+        }
+        server {
+            runDir "run/fabric-1.20.1/server"
+        }
+        datagen {
+            inherit server
+            name "Data Generation"
+            runDir "run/fabric-1.20.1/data"
+            vmArg "-Dfabric-api.datagen"
+            vmArg "-Dfabric-api.datagen.output-dir=${file("src/generated/resources")}"
+            vmArg "-Dfabric-api.datagen.modid=${mod_id}"
+        }
     }
 }
 
-jar.finalizedBy('reobfJar')
-
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+jar {
+    from("LICENSE-new.txt") {
+        rename { "${it}_${base.archivesName.get()}" }
+    }
 }
 
 publishing {
@@ -138,16 +153,6 @@ publishing {
             from components.java
         }
     }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        maven {
-            name = "release"
-            url = 'https://maven.nova-committee.cn/releases'
-            credentials {
-                username = System.getenv("MAVEN_USERNAME")
-                password = System.getenv("MAVEN_PASSWORD")
-            }
-        }
-    }
 }
+
+apply from: 'gradle/production-run.gradle'

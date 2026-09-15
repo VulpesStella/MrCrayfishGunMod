@@ -35,7 +35,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.*;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
@@ -121,7 +121,7 @@ public class WorkbenchScreen extends AbstractContainerScreen<WorkbenchContainer>
         if (stack.getItem() instanceof IAmmo) {
             return true;
         }
-        ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
         Objects.requireNonNull(id);
         for (GunItem gunItem : NetworkGunManager.getClientRegisteredGuns()) {
             if (id.equals(gunItem.getModifiedGun(stack).getProjectile().getItem())) {

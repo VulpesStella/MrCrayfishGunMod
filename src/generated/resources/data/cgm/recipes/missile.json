@@ -3,11 +3,11 @@
   "materials": [
     {
       "count": 2,
-      "tag": "forge:nuggets/iron"
+      "item": "minecraft:iron_nugget"
     },
     {
       "count": 4,
-      "tag": "forge:gunpowder"
+      "item": "minecraft:gunpowder"
     }
   ],
   "result": {

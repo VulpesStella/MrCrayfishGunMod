@@ -11,8 +11,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.HashMap;
@@ -61,7 +61,8 @@ public class Debug
         @Override
         public void getEditorWidgets(List<Pair<Component, Supplier<IDebugWidget>>> widgets)
         {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT)
+            {
                 ItemStack heldItem = Objects.requireNonNull(Minecraft.getInstance().player).getMainHandItem();
                 if(heldItem.getItem() instanceof GunItem gunItem)
                 {
@@ -72,7 +73,7 @@ public class Debug
                 widgets.add(Pair.of(Component.literal("Settings"), () -> new DebugButton(Component.literal(">"), btn -> {
                     Minecraft.getInstance().setScreen(ClientHandler.createEditorScreen(new Settings()));
                 })));
-            });
+            }
         }
     }
 
@@ -87,9 +88,10 @@ public class Debug
         @Override
         public void getEditorWidgets(List<Pair<Component, Supplier<IDebugWidget>>> widgets)
         {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT)
+            {
                 widgets.add(Pair.of(Component.literal("Force Aim"), () -> new DebugToggle(Debug.forceAim, value -> Debug.forceAim = value)));
-            });
+            }
         }
     }
 }
