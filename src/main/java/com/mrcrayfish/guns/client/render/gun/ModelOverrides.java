@@ -1,16 +1,10 @@
 package com.mrcrayfish.guns.client.render.gun;
 
-import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.item.GunItem;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -19,7 +13,6 @@ import java.util.Map;
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID, value = Dist.CLIENT)
 public class ModelOverrides
 {
     private static final Map<Item, IOverrideModel> MODEL_MAP = new HashMap<>();
@@ -32,12 +25,11 @@ public class ModelOverrides
      */
     public static void register(Item item, IOverrideModel model)
     {
-        if(MODEL_MAP.putIfAbsent(item, model) == null)
-        {
-            /* Register model overrides as an event for ease. Doesn't create an extra overhead because
-             * Forge will just ignore it if it contains no events */
-            MinecraftForge.EVENT_BUS.register(model);
-        }
+        /* Fabric port note: the baseline also did MinecraftForge.EVENT_BUS.register(model) so
+         * override model instances could hold their own @SubscribeEvent handlers (e.g.
+         * MiniGunModel#onClientDisconnect). Fabric has no per-instance event bus, so override
+         * models that need events register their own Fabric callbacks (see MiniGunModel). */
+        MODEL_MAP.putIfAbsent(item, model);
     }
 
     /**
@@ -63,13 +55,28 @@ public class ModelOverrides
         return MODEL_MAP.get(stack.getItem());
     }
 
-    @SubscribeEvent
-    public static void onClientPlayerTick(TickEvent.PlayerTickEvent event)
+    /**
+     * Fabric port: was {@code @SubscribeEvent TickEvent.PlayerTickEvent} (Phase.START,
+     * LogicalSide.CLIENT). Fabric has no per-player client tick event, so every player of the
+     * client world is ticked once per client tick. Must be called during client mod init.
+     */
+    public static void register()
     {
-        if(event.phase == TickEvent.Phase.START && event.side == LogicalSide.CLIENT)
+        ClientTickEvents.START_CLIENT_TICK.register(mc ->
         {
-            tick(event.player);
-        }
+            if(mc.level != null)
+            {
+                for(Player player : mc.level.players())
+                {
+                    ModelOverrides.onClientPlayerTick(player);
+                }
+            }
+        });
+    }
+
+    static void onClientPlayerTick(Player player)
+    {
+        tick(player);
     }
 
     private static void tick(Player player)

@@ -4,7 +4,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.client.handler.GunRenderingHandler;
 import com.mrcrayfish.guns.client.screen.widget.MiniButton;
 import com.mrcrayfish.guns.client.util.RenderUtil;
@@ -16,7 +15,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.resources.language.I18n;
@@ -30,8 +28,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.client.ConfigScreenHandler;
-import net.minecraftforge.fml.ModList;
 import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
@@ -191,7 +187,7 @@ public class AttachmentScreen extends AbstractContainerScreen<AttachmentContaine
     private boolean canPlaceAttachmentInSlot(ItemStack stack, Slot slot) {
         if (!slot.isActive()) return false;
 
-        if (!slot.equals(this.getSlotUnderMouse())) return true;
+        if (!slot.equals(this.hoveredSlot)) return true;
 
         if (!slot.getItem().isEmpty()) return true;
 
@@ -267,6 +263,11 @@ public class AttachmentScreen extends AbstractContainerScreen<AttachmentContaine
     }
 
     private void openConfigScreen() {
+        // TODO(T11): Forge opened its config screen through ConfigScreenHandler.ConfigScreenFactory
+        // (provided by the Forge config screen system). Fabric 1.20.1 has no equivalent hook, so
+        // the original Forge lookup is kept below as a comment and we fall through to suggesting
+        // the Configured mod. Controllable-style optional integration, same handling.
+        /* Forge implementation (Forge-only APIs, not available on Fabric):
         ModList.get().getModContainerById(Reference.MOD_ID).ifPresent(container -> {
             Screen screen = container.getCustomExtension(ConfigScreenHandler.ConfigScreenFactory.class).map(function -> function.screenFunction().apply(this.minecraft, null)).orElse(null);
             if (screen != null) {
@@ -278,5 +279,12 @@ public class AttachmentScreen extends AbstractContainerScreen<AttachmentContaine
                 this.minecraft.player.displayClientMessage(message, false);
             }
         });
+        */
+        if (this.minecraft != null && this.minecraft.player != null) {
+            MutableComponent modName = Component.literal("Configured");
+            modName.setStyle(modName.getStyle().withColor(ChatFormatting.YELLOW).withUnderlined(true).withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("cgm.chat.open_curseforge_page"))).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://www.curseforge.com/minecraft/mc-mods/configured")));
+            Component message = Component.translatable("cgm.chat.install_configured", modName);
+            this.minecraft.player.displayClientMessage(message, false);
+        }
     }
 }

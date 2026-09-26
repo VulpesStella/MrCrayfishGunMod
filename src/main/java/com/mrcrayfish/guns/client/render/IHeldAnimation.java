@@ -8,8 +8,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * Author: MrCrayfish
@@ -24,7 +22,6 @@ public interface IHeldAnimation
      * @param hand the hand which is currently being used
      * @param aimProgress the current animation progress of looking down the weapons sight
      */
-    @OnlyIn(Dist.CLIENT)
     default void applyPlayerModelRotation(Player player, ModelPart rightArm, ModelPart leftArm, ModelPart head, InteractionHand hand, float aimProgress) {}
 
     /**
@@ -37,7 +34,6 @@ public interface IHeldAnimation
      * @param poseStack the current matrix stack
      * @param buffer a render type buffer get
      */
-    @OnlyIn(Dist.CLIENT)
     default void applyPlayerPreRender(Player player, InteractionHand hand, float aimProgress, PoseStack poseStack, MultiBufferSource buffer) {}
 
     /**
@@ -49,7 +45,6 @@ public interface IHeldAnimation
      * @param poseStack the current matrix stack
      * @param buffer a render type buffer get
      */
-    @OnlyIn(Dist.CLIENT)
     default void applyHeldItemTransforms(Player player, InteractionHand hand, float aimProgress, PoseStack poseStack, MultiBufferSource buffer) {}
 
     /**
@@ -100,7 +95,6 @@ public interface IHeldAnimation
      * @param source the model renderer to grab the rotations from
      * @param dest   the model renderer to apply the rotations to
      */
-    @OnlyIn(Dist.CLIENT)
     static void copyModelAngles(ModelPart source, ModelPart dest)
     {
         dest.xRot = source.xRot;

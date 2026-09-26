@@ -7,10 +7,7 @@ import com.mrcrayfish.guns.init.ModSyncedDataKeys;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.network.NetworkEvent;
 
-import java.util.function.Supplier;
 
 /**
  * Author: MrCrayfish
@@ -51,12 +48,12 @@ public class C2SMessageReload extends PlayMessage<C2SMessageReload>
                     return;
 
                 ItemStack gun = player.getMainHandItem();
-                if(MinecraftForge.EVENT_BUS.post(new GunReloadEvent.Pre(player, gun)))
+                if(GunReloadEvent.firePre(player, gun))
                 {
                     ModSyncedDataKeys.RELOADING.setValue(player, false);
                     return;
                 }
-                MinecraftForge.EVENT_BUS.post(new GunReloadEvent.Post(player, gun));
+                GunReloadEvent.firePost(player, gun);
             }
         });
         context.setHandled(true);

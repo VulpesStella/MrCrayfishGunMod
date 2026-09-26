@@ -35,7 +35,7 @@ public class ItemInHandLayerMixin
     {
         if(entity.getType() == EntityType.PLAYER)
         {
-            InteractionHand hand = Minecraft.getInstance().options.mainHand().get() == arm ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+            InteractionHand hand = entity.getMainArm() == arm ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
             if(hand == InteractionHand.OFF_HAND)
             {
                 if(stack.getItem() instanceof GunItem)

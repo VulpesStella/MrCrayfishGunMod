@@ -7,6 +7,7 @@ import com.mrcrayfish.guns.client.render.gun.IOverrideModel;
 import com.mrcrayfish.guns.client.util.RenderUtil;
 import com.mrcrayfish.guns.common.Gun;
 import com.mrcrayfish.guns.init.ModSyncedDataKeys;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
@@ -14,8 +15,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import javax.annotation.Nullable;
 import java.util.WeakHashMap;
@@ -26,6 +25,15 @@ import java.util.WeakHashMap;
 public class MiniGunModel implements IOverrideModel
 {
     private WeakHashMap<LivingEntity, Rotations> rotationMap = new WeakHashMap<>();
+
+    public MiniGunModel()
+    {
+        /* Fabric port note: the baseline @SubscribeEvent onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut)
+         * worked because ModelOverrides.register() put every override model instance on the Forge
+         * event bus. Fabric has no per-instance event bus, so the DISCONNECT hook is registered
+         * per model instance here instead. */
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> this.onClientDisconnect());
+    }
 
     @Override
     public void tick(Player player)
@@ -70,8 +78,7 @@ public class MiniGunModel implements IOverrideModel
         private int prevRotation;
     }
 
-    @SubscribeEvent
-    public void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event)
+    public void onClientDisconnect()
     {
         this.rotationMap.clear();
     }

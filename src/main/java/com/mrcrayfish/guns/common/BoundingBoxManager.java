@@ -1,5 +1,8 @@
 package com.mrcrayfish.guns.common;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.MinecraftServer;
 import com.mrcrayfish.guns.Config;
 import com.mrcrayfish.guns.common.headshot.BasicHeadshotBox;
 import com.mrcrayfish.guns.common.headshot.ChildHeadshotBox;
@@ -14,10 +17,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
@@ -110,21 +109,25 @@ public class BoundingBoxManager
         return (IHeadshotBox<T>) headshotBoxes.get(type);
     }
 
-    @SubscribeEvent(receiveCanceled = true)
-    public void onPlayerTick(TickEvent.PlayerTickEvent event)
+    /**
+     * Fabric port: registered unconditionally from FabricGunMod; the config gate stays
+     * inside the tick (same behavior as the conditional Forge registration plus the
+     * original in-method check).
+     */
+    public void onPlayerTick(MinecraftServer server)
     {
         if(!Config.COMMON.gameplay.improvedHitboxes.get())
             return;
 
-        if(event.side == LogicalSide.SERVER && event.phase == TickEvent.Phase.END)
+        for(Player player : server.getPlayerList().getPlayers())
         {
-            if(event.player.isSpectator())
+            if(player.isSpectator())
             {
-                playerBoxes.remove(event.player);
-                return;
+                playerBoxes.remove(player);
+                continue;
             }
-            LinkedList<AABB> boxes = playerBoxes.computeIfAbsent(event.player, player -> new LinkedList<>());
-            boxes.addFirst(event.player.getBoundingBox());
+            LinkedList<AABB> boxes = playerBoxes.computeIfAbsent(player, p -> new LinkedList<>());
+            boxes.addFirst(player.getBoundingBox());
             if(boxes.size() > 20)
             {
                 boxes.removeLast();
@@ -132,10 +135,10 @@ public class BoundingBoxManager
         }
     }
 
-    @SubscribeEvent(receiveCanceled = true)
-    public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event)
+    public void register()
     {
-        playerBoxes.remove(event.getEntity());
+        ServerTickEvents.END_SERVER_TICK.register(server -> this.onPlayerTick(server));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> playerBoxes.remove(handler.player));
     }
 
     public static AABB getBoundingBox(Player entity, int ping)

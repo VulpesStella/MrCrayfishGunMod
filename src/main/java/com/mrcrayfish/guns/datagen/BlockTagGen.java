@@ -2,31 +2,37 @@ package com.mrcrayfish.guns.datagen;
 
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.common.ModTags;
+import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
+import net.fabricmc.fabric.api.tag.convention.v1.ConventionalBlockTags;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.data.PackOutput;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraftforge.common.Tags;
-import net.minecraftforge.common.data.BlockTagsProvider;
-import net.minecraftforge.common.data.ExistingFileHelper;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.CompletableFuture;
 
-public class BlockTagGen extends BlockTagsProvider
+/**
+ * Fabric port: forge convention tags (#forge:glass, #forge:glass_panes) are replaced
+ * by Fabric's convention tags (c:glass_blocks, c:glass_panes), which also fixes the
+ * missing-tag references observed at runtime for cgm:fragile.
+ */
+public class BlockTagGen extends FabricTagProvider.BlockTagProvider
 {
-    public BlockTagGen(PackOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider, @Nullable ExistingFileHelper existingFileHelper)
+    public BlockTagGen(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider)
     {
-        super(output, lookupProvider, Reference.MOD_ID, existingFileHelper);
+        super(output, lookupProvider);
     }
 
     @Override
     protected void addTags(HolderLookup.Provider provider)
     {
-        this.tag(ModTags.Blocks.FRAGILE)
-                .addTag(Tags.Blocks.GLASS_PANES)
-                .addTag(Tags.Blocks.GLASS)
-                .addTag(BlockTags.CANDLES)
+        this.getOrCreateTagBuilder(ModTags.Blocks.FRAGILE)
+                // c:/minecraft convention tags are not resolvable during datagen
+                // validation, so reference them optionally (runtime resolves them via
+                // Fabric API's shipped convention tag data)
+                .addOptionalTag(ConventionalBlockTags.GLASS_PANES.location())
+                .addOptionalTag(ConventionalBlockTags.GLASS_BLOCKS.location())
+                .addOptionalTag(BlockTags.CANDLES.location())
                 .add(Blocks.LILY_PAD)
                 .add(Blocks.COCOA)
                 .add(Blocks.END_ROD)

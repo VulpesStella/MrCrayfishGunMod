@@ -117,7 +117,7 @@ public class DyeItemRecipe extends CustomRecipe
         for(int i = 0; i < remainingItems.size(); ++i)
         {
             ItemStack stack = inventory.getItem(i);
-            remainingItems.set(i, net.minecraftforge.common.ForgeHooks.getCraftingRemainingItem(stack));
+            remainingItems.set(i, stack.getItem().hasCraftingRemainingItem() ? new ItemStack(stack.getItem().getCraftingRemainingItem()) : ItemStack.EMPTY);
         }
         return remainingItems;
     }

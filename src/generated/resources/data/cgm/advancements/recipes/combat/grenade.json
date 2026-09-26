@@ -5,7 +5,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:gunpowder"
+            "items": [
+              "minecraft:gunpowder"
+            ]
           }
         ]
       },
@@ -15,7 +17,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/iron"
+            "items": [
+              "minecraft:iron_nugget"
+            ]
           }
         ]
       },
@@ -39,5 +43,6 @@
     "recipes": [
       "cgm:grenade"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

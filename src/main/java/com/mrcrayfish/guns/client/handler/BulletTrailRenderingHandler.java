@@ -6,7 +6,10 @@ import com.mojang.math.Axis;
 import com.mrcrayfish.guns.client.BulletTrail;
 import com.mrcrayfish.guns.client.GunRenderType;
 import com.mrcrayfish.guns.client.util.RenderUtil;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -17,9 +20,6 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.joml.Matrix4f;
 
 import java.util.HashMap;
@@ -43,7 +43,39 @@ public class BulletTrailRenderingHandler
 
     private Map<Integer, BulletTrail> bullets = new HashMap<>();
 
+    public Map<Integer, BulletTrail> getTrails()
+    {
+        return this.bullets;
+    }
+
+    /* Fabric port: used by register() to detect the player instance changing, which replaces
+     * the Forge ClientPlayerNetworkEvent.Clone handler (respawn/dimension change cleanup). */
+    private static LocalPlayer lastPlayer;
+
     private BulletTrailRenderingHandler() {}
+
+    /**
+     * Fabric port: registers the Fabric event hooks that replaced the Forge
+     * {@code @SubscribeEvent} handlers (Forge: {@code MinecraftForge.EVENT_BUS.register(this)}).
+     */
+    public static void register()
+    {
+        // Forge: TickEvent.ClientTickEvent(Phase.END)
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> BulletTrailRenderingHandler.get().onClientTick());
+        // Forge: ClientPlayerNetworkEvent.Clone (respawn / dimension change). Fabric has no
+        // player clone event, so the last player instance is tracked here and the trail state
+        // is cleared whenever Minecraft.player changes (equivalent handling).
+        ClientTickEvents.END_CLIENT_TICK.register(mc ->
+        {
+            if(mc.player != lastPlayer)
+            {
+                lastPlayer = mc.player;
+                BulletTrailRenderingHandler.get().bullets.clear();
+            }
+        });
+        // Forge: ClientPlayerNetworkEvent.LoggingOut -> Fabric ClientPlayConnectionEvents.DISCONNECT
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> BulletTrailRenderingHandler.get().bullets.clear());
+    }
 
     /**
      * Adds a bullet trail to render into the world
@@ -70,17 +102,13 @@ public class BulletTrailRenderingHandler
         this.bullets.remove(entityId);
     }
 
-    @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event)
+    void onClientTick()
     {
         Level world = Minecraft.getInstance().level;
         if(world != null)
         {
-            if(event.phase == TickEvent.Phase.END)
-            {
-                this.bullets.values().forEach(BulletTrail::tick);
-                this.bullets.values().removeIf(BulletTrail::isDead);
-            }
+            this.bullets.values().forEach(BulletTrail::tick);
+            this.bullets.values().removeIf(BulletTrail::isDead);
         }
         else if(!this.bullets.isEmpty())
         {
@@ -94,18 +122,6 @@ public class BulletTrailRenderingHandler
         {
             this.renderBulletTrail(bulletTrail, stack, partialSticks);
         }
-    }
-
-    @SubscribeEvent
-    public void onRespawn(ClientPlayerNetworkEvent.Clone event)
-    {
-        this.bullets.clear();
-    }
-
-    @SubscribeEvent
-    public void onLoggedOut(ClientPlayerNetworkEvent.LoggingOut event)
-    {
-        this.bullets.clear();
     }
 
     private void renderBulletTrail(BulletTrail trail, PoseStack poseStack, float deltaTicks)

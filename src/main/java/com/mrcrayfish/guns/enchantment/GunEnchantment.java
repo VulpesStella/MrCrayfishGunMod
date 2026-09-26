@@ -1,20 +1,33 @@
 package com.mrcrayfish.guns.enchantment;
 
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
+
+import java.util.function.Predicate;
 
 /**
  * Author: MrCrayfish
  */
 public abstract class GunEnchantment extends Enchantment
 {
+    private final Predicate<ItemStack> categoryPredicate;
     private Type type;
 
-    protected GunEnchantment(Rarity rarityIn, EnchantmentCategory typeIn, EquipmentSlot[] slots, Type type)
+    protected GunEnchantment(Rarity rarityIn, Predicate<ItemStack> typeIn, EquipmentSlot[] slots, Type type)
     {
-        super(rarityIn, typeIn, slots);
+        // WEAPON is a placeholder; the enum category is never consulted because
+        // canEnchant below is the sole applicability check on Fabric.
+        super(rarityIn, EnchantmentCategory.WEAPON, slots);
+        this.categoryPredicate = typeIn;
         this.type = type;
+    }
+
+    @Override
+    public boolean canEnchant(ItemStack stack)
+    {
+        return this.categoryPredicate.test(stack);
     }
 
     @Override

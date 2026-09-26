@@ -1,6 +1,6 @@
 package com.mrcrayfish.guns.item;
 
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.client.GunItemStackRenderer;
 import com.mrcrayfish.guns.client.KeyBinds;
 import com.mrcrayfish.guns.common.Gun;
@@ -20,15 +20,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.WeakHashMap;
-import java.util.function.Consumer;
 
 public class GunItem extends Item implements IColored, IMeta
 {
@@ -56,7 +54,7 @@ public class GunItem extends Item implements IColored, IMeta
     {
         Gun modifiedGun = this.getModifiedGun(stack);
 
-        Item ammo = ForgeRegistries.ITEMS.getValue(modifiedGun.getProjectile().getItem());
+        Item ammo = BuiltInRegistries.ITEM.get(modifiedGun.getProjectile().getItem());
         if(ammo != null)
         {
             tooltip.add(Component.translatable("info.cgm.ammo_type", Component.translatable(ammo.getDescriptionId()).withStyle(ChatFormatting.WHITE)).withStyle(ChatFormatting.GRAY));
@@ -103,13 +101,10 @@ public class GunItem extends Item implements IColored, IMeta
         tooltip.add(Component.translatable("info.cgm.attachment_help", KeyBinds.KEY_ATTACHMENTS.getTranslatedKeyMessage().getString().toUpperCase(Locale.ENGLISH)).withStyle(ChatFormatting.YELLOW));
     }
 
-    @Override
-    public boolean onEntitySwing(ItemStack stack, LivingEntity entity)
-    {
-        return true;
-    }
+    // Fabric port: Forge IForgeItem#onEntitySwing does not exist on vanilla Item;
+    // gun swing suppression is handled by the MinecraftMixin attack cancel.
 
-    @Override
+    // Fabric port: vanilla Item has no shouldCauseReequipAnimation; kept as internal helper.
     public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged)
     {
         return slotChanged;
@@ -156,28 +151,18 @@ public class GunItem extends Item implements IColored, IMeta
                 }
             });
         }
-        if(GunMod.isDebugging())
+        if(FabricGunMod.isDebugging())
         {
             return Debug.getGun(this);
         }
         return this.gun;
     }
 
-    @Override
-    public boolean canApplyAtEnchantingTable(ItemStack stack, Enchantment enchantment)
-    {
-        if(enchantment.category == EnchantmentTypes.SEMI_AUTO_GUN)
-        {
-            Gun modifiedGun = this.getModifiedGun(stack);
-            return !modifiedGun.getGeneral().isAuto();
-        }
-        return super.canApplyAtEnchantingTable(stack, enchantment);
-    }
 
     @Override
     public boolean isEnchantable(ItemStack stack)
     {
-        return this.getMaxStackSize(stack) == 1;
+        return this.getMaxStackSize() == 1;
     }
 
     @Override
@@ -186,16 +171,4 @@ public class GunItem extends Item implements IColored, IMeta
         return 5;
     }
 
-    @Override
-    public void initializeClient(Consumer<IClientItemExtensions> consumer)
-    {
-        consumer.accept(new IClientItemExtensions()
-        {
-            @Override
-            public BlockEntityWithoutLevelRenderer getCustomRenderer()
-            {
-                return new GunItemStackRenderer();
-            }
-        });
-    }
 }

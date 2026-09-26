@@ -8,7 +8,7 @@ import com.mrcrayfish.guns.init.ModParticleTypes;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 /**
  * Author: MrCrayfish
@@ -59,6 +59,6 @@ public class TrailData implements ParticleOptions
     @Override
     public String writeToString()
     {
-        return ForgeRegistries.PARTICLE_TYPES.getKey(this.getType()) + " " + this.enchanted;
+        return BuiltInRegistries.PARTICLE_TYPE.getKey(this.getType()) + " " + this.enchanted;
     }
 }

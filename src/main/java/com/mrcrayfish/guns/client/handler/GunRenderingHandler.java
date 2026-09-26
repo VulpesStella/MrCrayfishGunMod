@@ -6,7 +6,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.client.GunModel;
 import com.mrcrayfish.guns.client.GunRenderType;
@@ -17,7 +17,6 @@ import com.mrcrayfish.guns.client.util.RenderUtil;
 import com.mrcrayfish.guns.common.GripType;
 import com.mrcrayfish.guns.common.Gun;
 import com.mrcrayfish.guns.common.properties.SightAnimation;
-import com.mrcrayfish.guns.compat.CMDCamHelper;
 import com.mrcrayfish.guns.event.GunFireEvent;
 import com.mrcrayfish.guns.init.ModSyncedDataKeys;
 import com.mrcrayfish.guns.item.GrenadeItem;
@@ -40,6 +39,7 @@ import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -53,12 +53,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.RenderHandEvent;
-import net.minecraftforge.client.event.ViewportEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
@@ -104,11 +98,11 @@ public class GunRenderingHandler {
         return this.renderingWeapon;
     }
 
-    @SubscribeEvent
-    public void onTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END)
-            return;
+    public void register() {
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(mc -> this.onTick());
+    }
 
+    public void onTick() {
         this.updateSprinting();
         this.updateMuzzleFlash();
         this.updateOffhandTranslate();
@@ -156,7 +150,6 @@ public class GunRenderingHandler {
         this.offhandTranslate = Mth.clamp(this.offhandTranslate + direction, 0.0F, 1.0F);
     }
 
-    @SubscribeEvent
     public void onGunFire(GunFireEvent.Post event) {
         if (!event.isClient())
             return;
@@ -183,25 +176,28 @@ public class GunRenderingHandler {
      * very hard to see through, so by lowering the FOV it makes it possible to look through it. This
      * avoids having to render the game twice, which saves a lot of performance.
      */
-    @SubscribeEvent
-    public void onComputeFov(ViewportEvent.ComputeFov event) {
+    /**
+     * Fabric port of ViewportEvent.ComputeFov. Called from GameRendererMixin#getFov;
+     * returns the modified FOV for the first-person hand viewport.
+     */
+    public double onComputeFov(double fov, boolean usedConfiguredFov, float partialTick) {
         // We only want to modify the FOV of the viewport for rendering hand/items in first person
-        if (event.usedConfiguredFov())
-            return;
+        if (usedConfiguredFov)
+            return fov;
 
         // Test if the gun has a scope
         LocalPlayer player = Objects.requireNonNull(Minecraft.getInstance().player);
         ItemStack heldItem = player.getMainHandItem();
         if (!(heldItem.getItem() instanceof GunItem gunItem))
-            return;
+            return fov;
 
         Gun modifiedGun = gunItem.getModifiedGun(heldItem);
         if (!modifiedGun.canAimDownSight())
-            return;
+            return fov;
 
         // Change the FOV of the first person viewport based on the scope and aim progress
         if (AimingHandler.get().getNormalisedAdsProgress() <= 0)
-            return;
+            return fov;
 
         // Calculate the time curve
         double time = AimingHandler.get().getNormalisedAdsProgress();
@@ -210,45 +206,52 @@ public class GunRenderingHandler {
 
         // Apply the new FOV
         double viewportFov = PropertyHelper.getViewportFov(heldItem, modifiedGun);
-        double newFov = viewportFov > 0 ? viewportFov : event.getFOV(); // Backwards compatibility
-        event.setFOV(Mth.lerp(time, event.getFOV(), newFov));
+        double newFov = viewportFov > 0 ? viewportFov : fov; // Backwards compatibility
+        return Mth.lerp(time, fov, newFov);
     }
 
-    @SubscribeEvent
-    public void onRenderOverlay(RenderHandEvent event) {
-        PoseStack poseStack = event.getPoseStack();
+    /**
+     * Fabric port of the Forge RenderHandEvent handler. Called from ItemInHandRendererMixin
+     * at the head of renderArmWithItem (per hand). Returns true when this handler rendered
+     * the hand itself and vanilla must be canceled.
+     *
+     * NOTE(T05 runtime verification): the baseline Forge event pose stack did not include
+     * the two view-rotation mulPose calls vanilla renderHandsWithItems applies before
+     * renderArmWithItem; the first-shot test screenshot verifies alignment.
+     */
+    public boolean onRenderHand(PoseStack poseStack, InteractionHand hand, ItemStack heldItem, float partialTick, net.minecraft.client.renderer.MultiBufferSource bufferSource, int packedLight) {
+        boolean cgmCanceled = false;
 
-        boolean right = Minecraft.getInstance().options.mainHand().get() == HumanoidArm.RIGHT ? event.getHand() == InteractionHand.MAIN_HAND : event.getHand() == InteractionHand.OFF_HAND;
-        HumanoidArm hand = right ? HumanoidArm.RIGHT : HumanoidArm.LEFT;
+        boolean right = Minecraft.getInstance().options.mainHand().get() == HumanoidArm.RIGHT ? hand == InteractionHand.MAIN_HAND : hand == InteractionHand.OFF_HAND;
+        HumanoidArm armSide = right ? HumanoidArm.RIGHT : HumanoidArm.LEFT;
 
-        ItemStack heldItem = event.getItemStack();
-        if (event.getHand() == InteractionHand.OFF_HAND) {
+        if (hand == InteractionHand.OFF_HAND) {
             if (heldItem.getItem() instanceof GunItem) {
-                event.setCanceled(true);
-                return;
+                return true;
             }
 
-            float offhand = 1.0F - Mth.lerp(event.getPartialTick(), this.prevOffhandTranslate, this.offhandTranslate);
+            float offhand = 1.0F - Mth.lerp(partialTick, this.prevOffhandTranslate, this.offhandTranslate);
             poseStack.translate(0, offhand * -0.6F, 0);
 
             Player player = Minecraft.getInstance().player;
             if (player != null && player.getMainHandItem().getItem() instanceof GunItem) {
                 Gun modifiedGun = ((GunItem) player.getMainHandItem().getItem()).getModifiedGun(player.getMainHandItem());
                 if (!modifiedGun.getGeneral().getGripType().getHeldAnimation().canRenderOffhandItem()) {
-                    return;
+                    return false;
                 }
             }
 
             /* Makes the off hand item move out of view */
             poseStack.translate(0, -1 * AimingHandler.get().getNormalisedAdsProgress(), 0);
+            return false;
         }
 
         if (!(heldItem.getItem() instanceof GunItem gunItem)) {
-            return;
+            return false;
         }
 
         /* Cancel it because we are doing our own custom render */
-        event.setCanceled(true);
+        cgmCanceled = true;
 
         ItemStack overrideModel = ItemStack.EMPTY;
         if (heldItem.getTag() != null) {
@@ -270,7 +273,7 @@ public class GunRenderingHandler {
 
         Gun modifiedGun = gunItem.getModifiedGun(heldItem);
         if (AimingHandler.get().getNormalisedAdsProgress() > 0 && modifiedGun.canAimDownSight()) {
-            if (event.getHand() == InteractionHand.MAIN_HAND) {
+            if (hand == InteractionHand.MAIN_HAND) {
                 double xOffset = translateX;
                 double yOffset = translateY;
                 double zOffset = translateZ;
@@ -330,16 +333,16 @@ public class GunRenderingHandler {
         }
 
         /* Applies custom bobbing animations */
-        this.applyBobbingTransforms(poseStack, event.getPartialTick());
+        this.applyBobbingTransforms(poseStack, partialTick);
 
         /* Applies equip progress animation translations */
-        float equipProgress = this.getEquipProgress(event.getPartialTick());
+        float equipProgress = this.getEquipProgress(partialTick);
         //poseStack.translate(0, equipProgress * -0.6F, 0);
         poseStack.mulPose(Axis.XP.rotationDegrees(equipProgress * -50F));
 
         /* Renders the reload arm. Will only render if actually reloading. This is applied before
          * any recoil or reload rotations as the animations would be borked if applied after. */
-        this.renderReloadArm(poseStack, event.getMultiBufferSource(), event.getPackedLight(), modifiedGun, heldItem, hand, translateX);
+        this.renderReloadArm(poseStack, bufferSource, packedLight, modifiedGun, heldItem, armSide, translateX);
 
         // Values are based on vanilla translations for first person
         int offset = right ? 1 : -1;
@@ -347,28 +350,29 @@ public class GunRenderingHandler {
 
         /* Applies recoil and reload rotations */
         this.applyAimingTransforms(poseStack, heldItem, modifiedGun, translateX, translateY, translateZ, offset);
-        this.applySwayTransforms(poseStack, modifiedGun, player, translateX, translateY, translateZ, event.getPartialTick());
-        this.applySprintingTransforms(modifiedGun, hand, poseStack, event.getPartialTick());
+        this.applySwayTransforms(poseStack, modifiedGun, player, translateX, translateY, translateZ, partialTick);
+        this.applySprintingTransforms(modifiedGun, armSide, poseStack, partialTick);
         this.applyRecoilTransforms(poseStack, heldItem, modifiedGun);
-        this.applyReloadTransforms(poseStack, event.getPartialTick());
-        this.applyShieldTransforms(poseStack, player, modifiedGun, event.getPartialTick());
+        this.applyReloadTransforms(poseStack, partialTick);
+        this.applyShieldTransforms(poseStack, player, modifiedGun, partialTick);
 
         /* Determines the lighting for the weapon. Weapon will appear bright from muzzle flash or light sources */
-        int blockLight = player.isOnFire() ? 15 : player.level().getBrightness(LightLayer.BLOCK, BlockPos.containing(player.getEyePosition(event.getPartialTick())));
+        int blockLight = player.isOnFire() ? 15 : player.level().getBrightness(LightLayer.BLOCK, BlockPos.containing(player.getEyePosition(partialTick)));
         blockLight += (this.entityIdForMuzzleFlash.contains(player.getId()) ? 3 : 0);
         blockLight = Math.min(blockLight, 15);
-        int packedLight = LightTexture.pack(blockLight, player.level().getBrightness(LightLayer.SKY, BlockPos.containing(player.getEyePosition(event.getPartialTick()))));
+        int muzzlePackedLight = LightTexture.pack(blockLight, player.level().getBrightness(LightLayer.SKY, BlockPos.containing(player.getEyePosition(partialTick))));
 
         /* Renders the first persons arms from the grip type of the weapon */
         poseStack.pushPose();
-        modifiedGun.getGeneral().getGripType().getHeldAnimation().renderFirstPersonArms(Minecraft.getInstance().player, hand, heldItem, poseStack, event.getMultiBufferSource(), packedLight, event.getPartialTick());
+        modifiedGun.getGeneral().getGripType().getHeldAnimation().renderFirstPersonArms(Minecraft.getInstance().player, armSide, heldItem, poseStack, bufferSource, muzzlePackedLight, partialTick);
         poseStack.popPose();
 
         /* Renders the weapon */
         ItemDisplayContext display = right ? ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
-        this.renderWeapon(Minecraft.getInstance().player, heldItem, display, event.getPoseStack(), event.getMultiBufferSource(), packedLight, event.getPartialTick());
+        this.renderWeapon(Minecraft.getInstance().player, heldItem, display, poseStack, bufferSource, muzzlePackedLight, partialTick);
 
         poseStack.popPose();
+        return cgmCanceled;
     }
 
     private void applyBobbingTransforms(PoseStack poseStack, float partialTicks) {
@@ -479,11 +483,11 @@ public class GunRenderingHandler {
         }
     }
 
-    @SubscribeEvent
-    public void onTick(TickEvent.RenderTickEvent event) {
-        if (event.phase.equals(TickEvent.Phase.START))
-            return;
+    public void registerWorldRender() {
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(context -> this.onRenderTick());
+    }
 
+    public void onRenderTick() {
         Minecraft mc = Minecraft.getInstance();
         if (!mc.isWindowActive())
             return;
@@ -533,7 +537,7 @@ public class GunRenderingHandler {
         if (Config.CLIENT.display.cooldownIndicator.get() && heldItem.getItem() instanceof GunItem) {
             Gun gun = ((GunItem) heldItem.getItem()).getGun();
             if (!gun.getGeneral().isAuto()) {
-                float coolDown = player.getCooldowns().getCooldownPercent(heldItem.getItem(), event.renderTickTime);
+                float coolDown = player.getCooldowns().getCooldownPercent(heldItem.getItem(), Minecraft.getInstance().getFrameTime());
                 if (coolDown > 0.0F) {
                     float scale = 3;
                     Window window = mc.getWindow();
@@ -720,7 +724,7 @@ public class GunRenderingHandler {
         if (mc.player == null || mc.player.tickCount < ReloadHandler.get().getStartReloadTick() || ReloadHandler.get().getReloadTimer() != 5)
             return;
 
-        Item item = ForgeRegistries.ITEMS.getValue(modifiedGun.getProjectile().getItem());
+        Item item = BuiltInRegistries.ITEM.get(modifiedGun.getProjectile().getItem());
         if (item == null)
             return;
 
@@ -794,23 +798,11 @@ public class GunRenderingHandler {
      * @return
      */
     private float getEquipProgress(float partialTicks) {
-        if (this.equippedProgressMainHandField == null) {
-            this.equippedProgressMainHandField = ObfuscationReflectionHelper.findField(ItemInHandRenderer.class, "f_109302_");
-            this.equippedProgressMainHandField.setAccessible(true);
-        }
-        if (this.prevEquippedProgressMainHandField == null) {
-            this.prevEquippedProgressMainHandField = ObfuscationReflectionHelper.findField(ItemInHandRenderer.class, "f_109303_");
-            this.prevEquippedProgressMainHandField.setAccessible(true);
-        }
+        // fields opened via cgm.accesswidener (baseline used SRG reflection)
         ItemInHandRenderer firstPersonRenderer = Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer();
-        try {
-            float equippedProgressMainHand = (float) this.equippedProgressMainHandField.get(firstPersonRenderer);
-            float prevEquippedProgressMainHand = (float) this.prevEquippedProgressMainHandField.get(firstPersonRenderer);
-            return 1.0F - Mth.lerp(partialTicks, prevEquippedProgressMainHand, equippedProgressMainHand);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
-        return 0.0F;
+        float equippedProgressMainHand = firstPersonRenderer.mainHandHeight;
+        float prevEquippedProgressMainHand = firstPersonRenderer.oMainHandHeight;
+        return 1.0F - Mth.lerp(partialTicks, prevEquippedProgressMainHand, equippedProgressMainHand);
     }
 
     private void updateImmersiveCamera() {
@@ -835,14 +827,20 @@ public class GunRenderingHandler {
         this.sprintIntensity = Mth.approach(this.sprintIntensity, intensity, 0.1F);
     }
 
-    @SubscribeEvent
-    public void onCameraSetup(ViewportEvent.ComputeCameraAngles event) {
-        if (GunMod.cmdCamLoaded && CMDCamHelper.isRollModified()) return;
+    /**
+     * Fabric port of ViewportEvent.ComputeCameraAngles roll support. Called from
+     * CameraMixin#setup TAIL; the returned roll is applied to the camera quaternion.
+     * TODO(T11): CMDCam roll detection (baseline consulted CMDCamHelper; the Fabric
+     * CMDCam counterpart is verified in T11, roll is skipped when it is loaded).
+     */
+    public float onCameraSetupRoll(float partialTick) {
+        if (FabricGunMod.cmdCamLoaded && com.mrcrayfish.guns.compat.CMDCamHelper.isRollModified()) return 0;
         if (Config.CLIENT.display.cameraRollEffect.get()) {
-            float roll = (float) Mth.lerp(event.getPartialTick(), this.prevImmersiveRoll, this.immersiveRoll);
+            float roll = (float) Mth.lerp(partialTick, this.prevImmersiveRoll, this.immersiveRoll);
             roll = (float) Math.sin((roll * Math.PI) / 2.0);
             roll *= Config.CLIENT.display.cameraRollAngle.get().floatValue();
-            event.setRoll(-roll);
+            return -roll;
         }
+        return 0;
     }
 }

@@ -9,16 +9,13 @@ import com.mrcrayfish.guns.client.render.crosshair.TechCrosshair;
 import com.mrcrayfish.guns.client.render.crosshair.TexturedCrosshair;
 import com.mrcrayfish.guns.event.GunFireEvent;
 import com.mrcrayfish.guns.item.GunItem;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.client.event.RenderGuiOverlayEvent;
-import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.config.ModConfigEvent;
+import fuzs.forgeconfigapiport.api.config.v2.ModConfigEvents;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -61,6 +58,27 @@ public class CrosshairHandler
         this.register(new TexturedCrosshair(new ResourceLocation(Reference.MOD_ID, "t")));
         this.register(new TexturedCrosshair(new ResourceLocation(Reference.MOD_ID, "smiley")));
         this.register(new TechCrosshair());
+    }
+
+    /**
+     * Fabric port: registers the Fabric event hooks that replaced the Forge
+     * {@code @SubscribeEvent} handlers (Forge: {@code MinecraftForge.EVENT_BUS.register(this)}).
+     */
+    public static void register()
+    {
+        // Forge: TickEvent.ClientTickEvent(Phase.END)
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> CrosshairHandler.get().onClientTick());
+        // Forge: GunFireEvent.Post (custom event, now a Fabric callback, see event/GunFireEvent)
+        GunFireEvent.registerPost(event -> CrosshairHandler.get().onGunFired(event));
+        // Forge: ModConfigEvent.Reloading on the mod bus (was wired from GunMod). Forge Config
+        // API Port exposes the equivalent per-mod reloading event. The event is already scoped
+        // to this mod's configs; the original CLIENT-type check is not needed since re-reading
+        // the client display config is idempotent (CGM's crosshair setting only exists there).
+        ModConfigEvents.reloading(Reference.MOD_ID).register(config -> CrosshairHandler.onConfigReload());
+        /* NOTE (T06): the Forge handler also subscribed RenderGuiOverlayEvent.Pre to cancel the
+         * vanilla crosshair overlay and draw the custom one. HudRenderCallback has no
+         * cancellation semantics, so nothing is drawn from Fabric events yet. See
+         * onRenderOverlay(GuiGraphics, float) below and the TODO there. */
     }
 
     /**
@@ -108,16 +126,41 @@ public class CrosshairHandler
         return ImmutableList.copyOf(this.registeredCrosshairs);
     }
 
-    @SubscribeEvent
-    public void onRenderOverlay(RenderGuiOverlayEvent.Pre event)
+    /**
+     * Forge port note: was {@code @SubscribeEvent RenderGuiOverlayEvent.Pre}. In Forge it
+     * canceled the vanilla crosshair overlay ({@code VanillaGuiOverlay.CROSSHAIR}) when aiming
+     * or when the held gun provides a custom crosshair, then drew the custom crosshair.
+     * Fabric's HudRenderCallback can not cancel vanilla HUD overlays, so this is kept as a
+     * plain method with the original body (cancellations turned into early returns).
+     *
+     * TODO(T06): hide the vanilla crosshair with a narrow Mixin (see EVENT-INVENTORY.md), then
+     * call this from a HudRenderCallback to draw the custom crosshair.
+     *
+     * @param graphics the GuiGraphics of the current HUD render
+     * @param partialTick the current tick delta
+     */
+    /**
+     * Fabric port: Forge canceled RenderGuiOverlayEvent.Pre (hiding the vanilla
+     * crosshair) whenever a gun was held or while aiming; GuiMixin#renderCrosshair
+     * consults this to skip the vanilla draw, and HudRenderCallback draws the custom one.
+     */
+    public boolean shouldHideVanillaCrosshair()
     {
-        if(event.getOverlay() != VanillaGuiOverlay.CROSSHAIR.type())
-            return;
-
-        Crosshair crosshair = this.getCurrentCrosshair();
         if(AimingHandler.get().getNormalisedAdsProgress() > 0.5)
         {
-            event.setCanceled(true);
+            return true;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if(mc.player == null)
+            return false;
+        return mc.player.getMainHandItem().getItem() instanceof GunItem;
+    }
+
+    public void onRenderOverlay(GuiGraphics graphics, float partialTick)
+    {
+        Crosshair crosshair = this.getCurrentCrosshair();
+        if(!this.shouldHideVanillaCrosshair())
+        {
             return;
         }
 
@@ -130,32 +173,22 @@ public class CrosshairHandler
         if(mc.player == null)
             return;
 
-        ItemStack heldItem = mc.player.getMainHandItem();
-        if(!(heldItem.getItem() instanceof GunItem))
-            return;
-
-        event.setCanceled(true);
-
         if(!mc.options.getCameraType().isFirstPerson())
             return;
 
         if(mc.player.getUseItem().getItem() == Items.SHIELD)
             return;
 
-        PoseStack stack = event.getGuiGraphics().pose();
+        PoseStack stack = graphics.pose();
         stack.pushPose();
-        int scaledWidth = event.getWindow().getGuiScaledWidth();
-        int scaledHeight = event.getWindow().getGuiScaledHeight();
-        crosshair.render(mc, stack, scaledWidth, scaledHeight, event.getPartialTick());
+        int scaledWidth = mc.getWindow().getGuiScaledWidth();
+        int scaledHeight = mc.getWindow().getGuiScaledHeight();
+        crosshair.render(mc, stack, scaledWidth, scaledHeight, partialTick);
         stack.popPose();
     }
 
-    @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event)
+    void onClientTick()
     {
-        if(event.phase != TickEvent.Phase.END)
-            return;
-
         Crosshair crosshair = this.getCurrentCrosshair();
         if(crosshair == null || crosshair.isDefault())
             return;
@@ -163,8 +196,7 @@ public class CrosshairHandler
         crosshair.tick();
     }
 
-    @SubscribeEvent
-    public void onGunFired(GunFireEvent.Post event)
+    void onGunFired(GunFireEvent.Post event)
     {
         Crosshair crosshair = this.getCurrentCrosshair();
         if(crosshair == null || crosshair.isDefault())
@@ -173,17 +205,23 @@ public class CrosshairHandler
         crosshair.onGunFired();
     }
 
-    /* Updates the crosshair if the config is reloaded. */
-    public static void onConfigReload(ModConfigEvent.Reloading event)
+    public static void registerHud()
     {
-        ModConfig config = event.getConfig();
-        if(config.getType() == ModConfig.Type.CLIENT && config.getModId().equals(Reference.MOD_ID))
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((graphics, tickDelta) ->
+                CrosshairHandler.get().onRenderOverlay(graphics, tickDelta));
+    }
+
+    /**
+     * Updates the crosshair if the config is reloaded. Fabric port note: the Forge
+     * {@code ModConfig.Type.CLIENT} and mod id checks are handled by the
+     * {@link ModConfigEvents#reloading} registration (mod scoped) in {@link #register()}.
+     */
+    public static void onConfigReload()
+    {
+        ResourceLocation id = ResourceLocation.tryParse(Config.CLIENT.display.crosshair.get());
+        if(id != null)
         {
-            ResourceLocation id = ResourceLocation.tryParse(Config.CLIENT.display.crosshair.get());
-            if(id != null)
-            {
-                CrosshairHandler.get().setCrosshair(id);
-            }
+            CrosshairHandler.get().setCrosshair(id);
         }
     }
 }

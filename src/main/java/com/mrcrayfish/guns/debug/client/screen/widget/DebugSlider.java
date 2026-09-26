@@ -2,33 +2,61 @@ package com.mrcrayfish.guns.debug.client.screen.widget;
 
 import com.mrcrayfish.guns.debug.IDebugWidget;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.client.gui.widget.ForgeSlider;
+import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Consumer;
 
 /**
+ * Fabric port: vanilla AbstractSliderButton replaces ForgeSlider. Rendering and the
+ * Consumer<Double> callback follow the baseline ForgeSlider behavior.
+ *
  * Author: MrCrayfish
  */
-public class DebugSlider extends ForgeSlider implements IDebugWidget {
+public class DebugSlider extends AbstractSliderButton implements IDebugWidget
+{
     private final Consumer<Double> callback;
+    private final double minValue;
+    private final double maxValue;
+    private final double stepSize;
+    private final int precision;
 
-    public DebugSlider(double minValue, double maxValue, double currentValue, double stepSize, int precision, Consumer<Double> callback) {
-        super(0, 0, 0, 14, Component.empty(), Component.empty(), minValue, maxValue, currentValue, stepSize, precision, true);
+    public DebugSlider(double minValue, double maxValue, double currentValue, double stepSize, int precision, Consumer<Double> callback)
+    {
+        super(0, 0, 0, 14, Component.empty(), Mth.clamp((currentValue - minValue) / (maxValue - minValue), 0.0, 1.0));
         this.callback = callback;
+        this.minValue = minValue;
+        this.maxValue = maxValue;
+        this.stepSize = stepSize;
+        this.precision = precision;
+        this.updateMessage();
+    }
+
+    public double getValue()
+    {
+        double raw = this.minValue + (this.maxValue - this.minValue) * this.value;
+        return this.stepSize > 0 ? Math.round(raw / this.stepSize) * this.stepSize : raw;
+    }
+
+    private double getDisplayValue()
+    {
+        return Math.round(this.getValue() * Math.pow(10, this.precision)) / Math.pow(10, this.precision);
     }
 
     @Override
-    protected void applyValue() {
+    protected void updateMessage()
+    {
+        this.setMessage(Component.literal(String.valueOf(this.getDisplayValue())));
+    }
+
+    @Override
+    protected void applyValue()
+    {
         this.callback.accept(this.getValue());
     }
 
-    @Override
-    public void renderWidget(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
-        int i = (this.isHoveredOrFocused() ? 2 : 1) * 20;
-        graphics.blit(WIDGETS_LOCATION, this.getX() + (int) (this.value * (double) (this.width - 8)), this.getY(), 0, 46 + i, 4, this.height);
-        graphics.blit(WIDGETS_LOCATION, this.getX() + (int) (this.value * (double) (this.width - 8)) + 4, this.getY(), 196, 46 + i, 4, this.height);
-    }
+    // Vanilla AbstractSliderButton renders the slider sprite and the message set by
+    // updateMessage; the baseline ForgeSlider texture look differs cosmetically only.
 }

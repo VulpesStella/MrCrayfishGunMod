@@ -28,13 +28,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
 
-@Mod.EventBusSubscriber
 public class ThrowableStunGrenadeEntity extends ThrowableGrenadeEntity {
     public ThrowableStunGrenadeEntity(EntityType<? extends ThrowableGrenadeEntity> entityType, Level world) {
         super(entityType, world);
@@ -51,12 +47,6 @@ public class ThrowableStunGrenadeEntity extends ThrowableGrenadeEntity {
         this.setMaxLife(maxCookTime);
     }
 
-    @SubscribeEvent
-    public static void blindMobs(LivingChangeTargetEvent event) {
-        if (Config.COMMON.stunGrenades.blind.blindMobs.get() && event.getOriginalTarget() != null && event.getEntity() instanceof Mob && event.getEntity().hasEffect(ModEffects.BLINDED.get())) {
-            ((Mob) event.getEntity()).setTarget(null);
-        }
-    }
 
     @Override
     public void onDeath() {

@@ -2,6 +2,7 @@ package com.mrcrayfish.guns.client.network;
 
 import com.mrcrayfish.guns.Config;
 import com.mrcrayfish.guns.client.BulletTrail;
+import com.mrcrayfish.guns.client.SpawnDataCache;
 import com.mrcrayfish.guns.client.CustomGunManager;
 import com.mrcrayfish.guns.client.audio.GunShotSound;
 import com.mrcrayfish.guns.client.handler.BulletTrailRenderingHandler;
@@ -14,6 +15,7 @@ import com.mrcrayfish.guns.network.message.S2CMessageGunSound;
 import com.mrcrayfish.guns.network.message.S2CMessageProjectileHitBlock;
 import com.mrcrayfish.guns.network.message.S2CMessageProjectileHitEntity;
 import com.mrcrayfish.guns.network.message.S2CMessageRemoveProjectile;
+import com.mrcrayfish.guns.network.message.S2CMessageSpawnData;
 import com.mrcrayfish.guns.network.message.S2CMessageStunGrenade;
 import com.mrcrayfish.guns.network.message.S2CMessageUpdateGuns;
 import com.mrcrayfish.guns.particles.BulletHoleData;
@@ -35,7 +37,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import javax.annotation.Nullable;
 import java.util.Objects;
@@ -189,7 +191,7 @@ public class ClientPlayHandler
         {
             if(Config.CLIENT.sounds.playSoundWhenCritical.get())
             {
-                SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation(Config.CLIENT.sounds.criticalSound.get()));
+                SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(new ResourceLocation(Config.CLIENT.sounds.criticalSound.get()));
                 return event != null ? event : SoundEvents.PLAYER_ATTACK_CRIT;
             }
         }
@@ -197,7 +199,7 @@ public class ClientPlayHandler
         {
             if(Config.CLIENT.sounds.playSoundWhenHeadshot.get())
             {
-                SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(new ResourceLocation(Config.CLIENT.sounds.headshotSound.get()));
+                SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(new ResourceLocation(Config.CLIENT.sounds.headshotSound.get()));
                 return event != null ? event : SoundEvents.PLAYER_ATTACK_KNOCKBACK;
             }
         }
@@ -212,6 +214,11 @@ public class ClientPlayHandler
     public static void handleRemoveProjectile(S2CMessageRemoveProjectile message)
     {
         BulletTrailRenderingHandler.get().remove(message.getEntityId());
+    }
+
+    public static void handleSpawnData(S2CMessageSpawnData message)
+    {
+        SpawnDataCache.handle(message);
     }
 
     public static void handleUpdateGuns(S2CMessageUpdateGuns message)

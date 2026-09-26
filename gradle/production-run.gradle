@@ -1,0 +1,132 @@
+// Production-only mod jars, never the named development classpath.
+//
+// transitive = false everywhere: Loom will not resolve a mod's own dependencies
+// for us, so every jar that must be present is listed explicitly. Fabric Loader
+// still loads jar-in-jar (JIJ) bundles that a listed mod ships, so nested
+// libraries such as Sophisticated Core's porting_lib modules and Cardinal
+// Components' submodules are deliberately NOT repeated here.
+configurations {
+    productionMods { transitive = false }
+    compatBackpacked { transitive = false }
+    compatTravelers { transitive = false }
+    compatSophisticated { transitive = false }
+    compatJei { transitive = false }
+}
+
+dependencies {
+    // Core runtime: CGM + required prerequisites. Present in every combination.
+    productionMods "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    productionMods files('libs/framework-0.8.0.jar', 'libs/forgeconfigapiport-8.0.3.jar')
+
+    // Red-line targets. Only the top-level mod jars; never the CGM release jar.
+    compatBackpacked files('libs/backpacked-fabric-1.20.1-3.0.9-signed.jar')
+    compatTravelers files(
+            'libs/travelersbackpack-fabric-1.20.1-9.1.52.jar',
+            'libs/cardinal-components-api-5.2.3.jar',
+            'libs/cloth-config-11.1.136-fabric.jar'
+    )
+    compatSophisticated files(
+            'libs/sophisticatedbackpacks-1.20.1-3.23.4.5.110.jar',
+            'libs/sophisticatedcore-1.20.1-1.2.7.15.166.jar'
+    )
+    compatJei files('libs/jei-15.20.0.134.jar')
+}
+
+// Combination name -> optional configurations. `base` carries no optional jar at
+// all, which is what proves CGM still runs with none of the red-line mods present.
+ext.cgmCombos = [
+        'base'          : [],
+        'backpacked'    : ['compatBackpacked'],
+        'travelers'     : ['compatTravelers'],
+        'sophisticated' : ['compatSophisticated'],
+        'jei'           : ['compatJei'],
+        'all-supported' : ['compatBackpacked', 'compatTravelers', 'compatSophisticated', 'compatJei'],
+]
+// JEI is a client-only mod and must not be pulled onto a dedicated server.
+ext.cgmClientOnlyConfigs = ['compatJei'] as Set
+
+def looseClasses = project.plugins.getPlugin('fabric-loom').class.classLoader
+def clientTaskClass = looseClasses.loadClass('net.fabricmc.loom.task.prod.ClientProductionRunTask')
+def serverTaskClass = looseClasses.loadClass('net.fabricmc.loom.task.prod.ServerProductionRunTask')
+
+def registerCombo = { String combo, boolean server ->
+    if (project.hasProperty('cgm.quickPlay') && project.hasProperty('cgm.multiplayer')) {
+        throw new GradleException('cgm.quickPlay and cgm.multiplayer are mutually exclusive')
+    }
+    List<String> configs = project.cgmCombos[combo]
+    if (server) {
+        configs = configs.findAll { !project.cgmClientOnlyConfigs.contains(it) }
+    }
+    // base keeps the historical bare task name (prodClient / prodServer) so the
+    // commands documented before this work keep working; it is also the exact
+    // "no optional mods" combination.
+    def base = combo == 'base'
+    def suffix = base ? '' : combo.split('-').collect { it.capitalize() }.join('')
+    def taskName = (server ? 'prodServer' : 'prodClient') + suffix
+    def dirName = server ? 'server' : 'client'
+    def baseDir = base
+            ? "run/fabric-1.20.1/production-${dirName}"
+            : "run/fabric-1.20.1/compat/${combo}/${dirName}"
+    def taskClass = server ? serverTaskClass : clientTaskClass
+    tasks.register(taskName, taskClass) {
+        group = 'production'
+        description = "Production ${server ? 'dedicated server' : 'client'}, combination '${combo}'" +
+                (configs.isEmpty() ? ' (no optional mods)' : " (+${configs.join(', ')})")
+        dependsOn tasks.named('remapJar')
+        mods.from tasks.named('remapJar').flatMap { it.archiveFile }
+        mods.from configurations.productionMods
+        configs.each { mods.from configurations.getByName(it) }
+        runDir = layout.projectDirectory.dir(baseDir)
+        javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+        jvmArgs.add('-Xmx2G')
+        // Escape hatch for diagnostics, e.g. -Pcgm.jvmArgs=-Dmixin.debug.countInjections=true to
+        // make Mixin report every injection point it actually applies at runtime.
+        if (project.hasProperty('cgm.jvmArgs')) {
+            project.property('cgm.jvmArgs').toString().split('\\s+').findAll { it }.each { jvmArgs.add(it) }
+        }
+        if (server) {
+            installerVersion = '1.0.1'
+            programArgs.add('nogui')
+            // Deliberately do not accept the Minecraft EULA on the user's behalf.
+        } else if (project.hasProperty('cgm.multiplayer')) {
+            programArgs.add('--quickPlayMultiplayer')
+            programArgs.add(project.property('cgm.multiplayer').toString())
+        } else if (project.hasProperty('cgm.quickPlay')) {
+            // Loads straight into a singleplayer world instead of stopping at the main menu.
+            // Needed to observe anything that only runs once a client level exists (JEI starts
+            // there, for example). Off unless -Pcgm.quickPlay=<world> is passed, so ordinary
+            // runs keep their documented behaviour.
+            programArgs.add('--quickPlaySingleplayer')
+            programArgs.add(project.property('cgm.quickPlay').toString())
+        }
+    }
+}
+
+project.cgmCombos.keySet().each { String combo ->
+    registerCombo(combo, false)
+    registerCombo(combo, true)
+}
+
+// Reproducible, inspectable manifest of exactly which jars each combination ships.
+// Does not launch a game and does not download anything.
+tasks.register('comboManifests') {
+    group = 'production'
+    description = 'Write the resolved mod list of every production combination to build/reports/port/combos'
+    dependsOn tasks.named('remapJar')
+    doLast {
+        def outDir = file('build/reports/port/combos')
+        outDir.mkdirs()
+        def release = tasks.named('remapJar').get().archiveFile.get().asFile
+        project.cgmCombos.each { String combo, List<String> configs ->
+            [false, true].each { boolean server ->
+                def effective = server ? configs.findAll { !project.cgmClientOnlyConfigs.contains(it) } : configs
+                def names = ["cgm -> ${release.name}"]
+                names += configurations.productionMods.files.collect { it.name }.sort()
+                effective.each { names += configurations.getByName(it).files.collect { it.name }.sort() }
+                def label = "${combo}-${server ? 'server' : 'client'}"
+                new File(outDir, "${label}.txt").text = names.unique().join('\n') + '\n'
+            }
+        }
+        logger.lifecycle("comboManifests: ${project.cgmCombos.size() * 2} manifests in ${outDir}")
+    }
+}

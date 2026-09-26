@@ -75,7 +75,7 @@ public class WorkbenchContainer extends AbstractContainerMenu
 
             if(index == 0)
             {
-                if(!this.moveItemStackTo(slotStack, 1, 36, true))
+                if(!this.moveItemStackTo(slotStack, 1, 37, true))
                 {
                     return ItemStack.EMPTY;
                 }
@@ -91,7 +91,7 @@ public class WorkbenchContainer extends AbstractContainerMenu
                 }
                 else if(index < 28)
                 {
-                    if(!this.moveItemStackTo(slotStack, 28, 36, false))
+                    if(!this.moveItemStackTo(slotStack, 28, 37, false))
                     {
                         return ItemStack.EMPTY;
                     }

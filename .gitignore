@@ -25,3 +25,10 @@ libs
 
 classes
 src/generated/resources/.cache/*
+# Local acceptance logs and temporary probe artifacts are never committed.
+docs/compat-redline-1.20.1/evidence/
+docs/migration/evidence/
+# fabric migration
+libs/
+run/
+*.log

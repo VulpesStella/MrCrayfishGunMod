@@ -21,13 +21,11 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
 
 /**
  * Author: MrCrayfish
  */
-public abstract class ThrowableItemEntity extends ThrowableProjectile implements IEntityAdditionalSpawnData
+public abstract class ThrowableItemEntity extends ThrowableProjectile implements ISpawnDataEntity
 {
     private ItemStack item = ItemStack.EMPTY;
     private boolean shouldBounce;
@@ -93,7 +91,7 @@ public abstract class ThrowableItemEntity extends ThrowableProjectile implements
             return;
         }
 
-        if (Config.COMMON.gameplay.projectileSlowDownInFluids.get() && this.isInFluidType()) {
+        if (Config.COMMON.gameplay.projectileSlowDownInFluids.get() && this.isInWater()) { // TODO(T08): Forge checked any fluid
             Vec3 delta = this.getDeltaMovement();
             double dx = delta.x;
             double dy = delta.y;
@@ -122,7 +120,7 @@ public abstract class ThrowableItemEntity extends ThrowableProjectile implements
                 {
                     BlockPos resultPos = blockResult.getBlockPos();
                     BlockState state = this.level().getBlockState(resultPos);
-                    SoundEvent event = state.getBlock().getSoundType(state, this.level(), resultPos, this).getStepSound();
+                    SoundEvent event = state.getBlock().getSoundType(state).getStepSound();
                     double speed = this.getDeltaMovement().length();
                     if(speed > 0.1)
                     {
@@ -206,6 +204,6 @@ public abstract class ThrowableItemEntity extends ThrowableProjectile implements
     @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket()
     {
-        return NetworkHooks.getEntitySpawningPacket(this);
+        return super.getAddEntityPacket();
     }
 }

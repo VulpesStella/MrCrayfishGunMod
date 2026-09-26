@@ -1,6 +1,6 @@
 package com.mrcrayfish.guns.compat;
 
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import net.minecraft.world.entity.player.Player;
 
 import java.lang.reflect.InvocationTargetException;
@@ -17,7 +17,7 @@ public class PlayerReviveHelper
 
     public static boolean isBleeding(Player player)
     {
-        if(!GunMod.playerReviveLoaded || disable)
+        if(!FabricGunMod.playerReviveLoaded || disable)
             return false;
 
         try

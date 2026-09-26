@@ -1,7 +1,7 @@
 package com.mrcrayfish.guns.client.handler;
 
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.client.KeyBinds;
 import com.mrcrayfish.guns.client.util.PropertyHelper;
 import com.mrcrayfish.guns.common.GripType;
@@ -15,6 +15,9 @@ import com.mrcrayfish.guns.network.PacketHandler;
 import com.mrcrayfish.guns.network.message.C2SMessageAim;
 import com.mrcrayfish.guns.util.GunEnchantmentHelper;
 import com.mrcrayfish.guns.util.GunModifierHelper;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.tags.BlockTags;
@@ -26,16 +29,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.RenderGuiOverlayEvent;
-import net.minecraftforge.client.event.ViewportEvent;
-import net.minecraftforge.common.Tags;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import javax.annotation.Nullable;
 import java.util.Map;
@@ -65,13 +63,38 @@ public class AimingHandler
 
     private AimingHandler() {}
 
-    @SubscribeEvent
-    public void onPlayerTick(TickEvent.PlayerTickEvent event)
+    /**
+     * Fabric port: registers the Fabric event hooks that replaced the Forge
+     * {@code @SubscribeEvent} handlers (Forge: {@code MinecraftForge.EVENT_BUS.register(this)}).
+     */
+    public static void register()
     {
-        if(event.phase != TickEvent.Phase.START)
-            return;
+        // Forge: TickEvent.PlayerTickEvent(Phase.START) fired for every ticked player.
+        // Fabric has no per-player client tick event, so every player of the client world
+        // is processed once per client tick (the Forge handler only ever did meaningful
+        // work for client-side players; server-side trackers were never read).
+        ClientTickEvents.START_CLIENT_TICK.register(mc ->
+        {
+            if(mc.level != null)
+            {
+                for(Player player : mc.level.players())
+                {
+                    AimingHandler.get().onPlayerTick(player);
+                }
+            }
+        });
+        // Forge: TickEvent.ClientTickEvent(Phase.START)
+        ClientTickEvents.START_CLIENT_TICK.register(mc -> AimingHandler.get().onClientTick());
+        // Forge: ClientPlayerNetworkEvent.LoggingOut -> Fabric ClientPlayConnectionEvents.DISCONNECT
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> AimingHandler.get().aimingMap.clear());
+        // Forge: RenderGuiOverlayEvent(receiveCanceled = true), used purely to refresh the
+        // normalized ADS progress each frame. Fabric's HudRenderCallback fires once per frame
+        // during HUD rendering, which is equivalent for this bookkeeping update.
+        HudRenderCallback.EVENT.register((graphics, tickDelta) -> AimingHandler.get().normalisedAdsProgress = AimingHandler.get().localTracker.getNormalProgress(tickDelta));
+    }
 
-        Player player = event.player;
+    void onPlayerTick(Player player)
+    {
         AimTracker tracker = getAimTracker(player);
         if(tracker != null)
         {
@@ -108,12 +131,8 @@ public class AimingHandler
         return 0F;
     }
 
-    @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event)
+    void onClientTick()
     {
-        if(event.phase != TickEvent.Phase.START)
-            return;
-
         Player player = Minecraft.getInstance().player;
         if(player == null)
             return;
@@ -137,49 +156,46 @@ public class AimingHandler
         this.localTracker.handleAiming(player, player.getItemInHand(InteractionHand.MAIN_HAND));
     }
 
-    @SubscribeEvent
-    public void onFovUpdate(ViewportEvent.ComputeFov event)
+    /**
+     * Forge port note: was {@code @SubscribeEvent ViewportEvent.ComputeFov} and modified the FOV
+     * while aiming down a scoped sight. Fabric 1.20.1 has no FOV modification event, so the
+     * original handler body is kept as a plain method that applies the modifier and returns the
+     * resulting FOV instead of writing it back to the event.
+     *
+     * TODO(T06): needs a narrow Mixin on GameRenderer#getFov to call this (see EVENT-INVENTORY.md).
+     *
+     * @param fov the current FOV
+     * @param usedConfiguredFov mirrors Forge's usedConfiguredFov(), false when the FOV was
+     *                          already altered (e.g. flying/spying) and must not be touched
+     * @return the FOV to use
+     */
+    public float onFovUpdate(float fov, boolean usedConfiguredFov)
     {
-        if(!event.usedConfiguredFov())
-            return;
+        if(!usedConfiguredFov)
+            return fov;
 
         Minecraft mc = Minecraft.getInstance();
         if(mc.player == null || mc.player.getMainHandItem().isEmpty() || mc.options.getCameraType() != CameraType.FIRST_PERSON)
-            return;
+            return fov;
 
         ItemStack heldItem = mc.player.getMainHandItem();
         if(!(heldItem.getItem() instanceof GunItem gunItem))
-            return;
+            return fov;
 
         if(AimingHandler.get().getNormalisedAdsProgress() == 0)
-            return;
+            return fov;
 
         if(ModSyncedDataKeys.RELOADING.getValue(mc.player))
-            return;
+            return fov;
 
         Gun modifiedGun = gunItem.getModifiedGun(heldItem);
         if(modifiedGun.getModules().getZoom() == null)
-            return;
+            return fov;
 
         double time = PropertyHelper.getSightAnimations(heldItem, modifiedGun).getFovCurve().apply(this.normalisedAdsProgress);
         float modifier = Gun.getFovModifier(heldItem, modifiedGun);
         modifier = (1.0F - modifier) * (float) time;
-        event.setFOV(event.getFOV() - event.getFOV() * modifier);
-    }
-
-    @SubscribeEvent
-    public void onClientTick(ClientPlayerNetworkEvent.LoggingOut event)
-    {
-        this.aimingMap.clear();
-    }
-
-    /**
-     * Prevents the crosshair from rendering when aiming down sight
-     */
-    @SubscribeEvent(receiveCanceled = true)
-    public void onRenderOverlay(RenderGuiOverlayEvent event)
-    {
-        this.normalisedAdsProgress = this.localTracker.getNormalProgress(event.getPartialTick());
+        return fov - fov * modifier;
     }
 
     public boolean isZooming()
@@ -223,9 +239,11 @@ public class AimingHandler
             return false;
 
         boolean zooming = KeyBinds.getAimMapping().isDown();
-        if(GunMod.controllableLoaded)
+        if(FabricGunMod.controllableLoaded)
         {
-            zooming |= ControllerHandler.isAiming();
+            // TODO(T11): Controllable hook - the Fabric Controllable counterpart is
+            // verified in T11; the flag is false on Fabric so this branch never runs.
+            zooming |= false;
         }
 
         return zooming;
@@ -241,7 +259,7 @@ public class AimingHandler
                 BlockState state = mc.level.getBlockState(result.getBlockPos());
                 Block block = state.getBlock();
                 // Forge should add a tag for intractable blocks so modders can know which blocks can be interacted with :)
-                return block instanceof EntityBlock || block == Blocks.CRAFTING_TABLE || block == ModBlocks.WORKBENCH.get() || state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS) || state.is(Tags.Blocks.CHESTS) || state.is(Tags.Blocks.FENCE_GATES);
+                return block instanceof EntityBlock || block == Blocks.CRAFTING_TABLE || block == ModBlocks.WORKBENCH.get() || state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS) || block instanceof ChestBlock || state.is(BlockTags.FENCE_GATES);
             }
             else if(mc.hitResult instanceof EntityHitResult result)
             {

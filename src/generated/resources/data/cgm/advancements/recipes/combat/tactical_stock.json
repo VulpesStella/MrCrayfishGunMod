@@ -17,7 +17,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/iron"
+            "items": [
+              "minecraft:iron_nugget"
+            ]
           }
         ]
       },
@@ -41,5 +43,6 @@
     "recipes": [
       "cgm:tactical_stock"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

@@ -1,52 +1,24 @@
 package com.mrcrayfish.guns.datagen;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.init.ModBlocks;
-import net.minecraft.data.PackOutput;
-import net.minecraft.data.loot.BlockLootSubProvider;
-import net.minecraft.data.loot.LootTableProvider;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.flag.FeatureFlags;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.ValidationContext;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricBlockLootTableProvider;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-
-public class LootTableGen extends LootTableProvider
+/**
+ * Fabric port: FabricBlockLootTableProvider replaces the Forge
+ * LootTableProvider/BlockLootSubProvider pair; the known-blocks filter is not needed
+ * because Fabric validates against the tables this provider actually emits.
+ */
+public class LootTableGen extends FabricBlockLootTableProvider
 {
-    public LootTableGen(PackOutput output)
+    public LootTableGen(FabricDataOutput output)
     {
-        super(output, Collections.emptySet(), ImmutableList.of(new LootTableProvider.SubProviderEntry(BlockProvider::new, LootContextParamSets.BLOCK)));
+        super(output);
     }
 
     @Override
-    protected void validate(Map<ResourceLocation, LootTable> map, ValidationContext context) {}
-
-    private static class BlockProvider extends BlockLootSubProvider
+    public void generate()
     {
-        protected BlockProvider()
-        {
-            super(ImmutableSet.of(), FeatureFlags.REGISTRY.allFlags());
-        }
-
-        @Override
-        protected void generate()
-        {
-            this.dropSelf(ModBlocks.WORKBENCH.get());
-        }
-
-        @Override
-        protected Iterable<Block> getKnownBlocks()
-        {
-            return ForgeRegistries.BLOCKS.getValues().stream().filter(block -> Reference.MOD_ID.equals(Objects.requireNonNull(ForgeRegistries.BLOCKS.getKey(block)).getNamespace())).collect(Collectors.toSet());
-        }
+        this.dropSelf(ModBlocks.WORKBENCH.get());
     }
 }

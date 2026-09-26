@@ -17,7 +17,8 @@ public class IncurableEffect extends MobEffect
         super(typeIn, liquidColorIn);
     }
 
-    @Override
+    // Fabric port: Forge MobEffect#getCurativeItems does not exist on vanilla; the
+    // milk/curative semantics require a narrow hook - TODO(T08) mixin per plan.
     public List<ItemStack> getCurativeItems()
     {
         return Collections.emptyList();

@@ -2,7 +2,7 @@ package com.mrcrayfish.guns.common.network;
 
 import com.mrcrayfish.framework.api.network.LevelLocation;
 import com.mrcrayfish.guns.Config;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.blockentity.WorkbenchBlockEntity;
 import com.mrcrayfish.guns.common.Gun;
 import com.mrcrayfish.guns.common.ProjectileManager;
@@ -51,9 +51,7 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.network.NetworkHooks;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.function.Predicate;
 
@@ -72,6 +70,8 @@ public class ServerPlayHandler
      */
     public static void handleShoot(C2SMessageShoot message, ServerPlayer player)
     {
+        if(!Float.isFinite(message.getRotationYaw()) || !Float.isFinite(message.getRotationPitch()))
+            return;
         if(player.isSpectator())
             return;
 
@@ -85,7 +85,7 @@ public class ServerPlayHandler
             Gun modifiedGun = item.getModifiedGun(heldItem);
             if(modifiedGun != null)
             {
-                if(MinecraftForge.EVENT_BUS.post(new GunFireEvent.Pre(player, heldItem)))
+                if(GunFireEvent.firePre(player, heldItem))
                     return;
 
                 /* Updates the yaw and pitch with the clients current yaw and pitch */
@@ -95,7 +95,7 @@ public class ServerPlayHandler
                 ShootTracker tracker = ShootTracker.getShootTracker(player);
                 if(tracker.hasCooldown(item) && tracker.getRemaining(item) > Config.SERVER.cooldownThreshold.get())
                 {
-                    GunMod.LOGGER.warn(player.getName().getContents() + "(" + player.getUUID() + ") tried to fire before cooldown finished or server is lagging? Remaining milliseconds: " + tracker.getRemaining(item));
+                    FabricGunMod.LOGGER.warn(player.getName().getContents() + "(" + player.getUUID() + ") tried to fire before cooldown finished or server is lagging? Remaining milliseconds: " + tracker.getRemaining(item));
                     return;
                 }
                 tracker.putCooldown(heldItem, item, modifiedGun);
@@ -136,7 +136,7 @@ public class ServerPlayHandler
 
                 player.level().gameEvent(GameEvent.PROJECTILE_SHOOT, player.position(), GameEvent.Context.of(player));
 
-                MinecraftForge.EVENT_BUS.post(new GunFireEvent.Post(player, heldItem));
+                GunFireEvent.firePost(player, heldItem);
 
                 if(Config.COMMON.aggroMobs.enabled.get())
                 {
@@ -227,7 +227,7 @@ public class ServerPlayHandler
 
         if(player.containerMenu instanceof WorkbenchContainer workbench)
         {
-            if(workbench.getPos().equals(pos))
+            if(workbench.getPos().equals(pos) && workbench.stillValid(player))
             {
                 WorkbenchRecipe recipe = WorkbenchRecipes.getRecipeById(world, id);
                 if(recipe == null || !recipe.hasMaterials(player))
@@ -276,7 +276,7 @@ public class ServerPlayHandler
                 Gun gun = gunItem.getModifiedGun(stack);
                 ResourceLocation id = gun.getProjectile().getItem();
 
-                Item item = ForgeRegistries.ITEMS.getValue(id);
+                Item item = BuiltInRegistries.ITEM.get(id);
                 if(item == null)
                 {
                     return;
@@ -320,7 +320,7 @@ public class ServerPlayHandler
         ItemStack heldItem = player.getMainHandItem();
         if(heldItem.getItem() instanceof GunItem)
         {
-            NetworkHooks.openScreen(player, new SimpleMenuProvider((windowId, playerInventory, player1) -> new AttachmentContainer(windowId, playerInventory, heldItem), Component.translatable("container.cgm.attachments")));
+            player.openMenu(new SimpleMenuProvider((windowId, playerInventory, player1) -> new AttachmentContainer(windowId, playerInventory, heldItem), Component.translatable("container.cgm.attachments")));
         }
     }
 }

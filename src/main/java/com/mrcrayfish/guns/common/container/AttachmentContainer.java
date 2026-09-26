@@ -93,7 +93,7 @@ public class AttachmentContainer extends AbstractContainerMenu
     @Override
     public boolean stillValid(Player playerIn)
     {
-        return true;
+        return playerIn.isAlive() && !this.weapon.isEmpty() && playerIn.getMainHandItem() == this.weapon;
     }
 
     @Override

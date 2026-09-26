@@ -4,31 +4,41 @@ import com.mrcrayfish.guns.Config;
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.client.audio.StunRingingSound;
 import com.mrcrayfish.guns.init.ModEffects;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.TickableSoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.client.sounds.SoundEngine;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraftforge.client.event.sound.PlaySoundEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
-import java.lang.reflect.Field;
 import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Fabric port: Forge PlaySoundEvent replaced by a narrow mixin on
+ * SoundEngine#play (see SoundEngineMixin) which defers to {@link #onPlaySound};
+ * the playing-sounds map is read through cgm.accesswidener instead of SRG reflection.
+ *
+ * Author: MrCrayfish
+ */
+@Environment(EnvType.CLIENT)
 public class SoundHandler
 {
+    private static final Logger LOGGER = LogManager.getLogger(Reference.MOD_ID);
     private static SoundHandler instance;
 
     public static SoundHandler get()
@@ -42,25 +52,30 @@ public class SoundHandler
 
     private final Map<SoundInstance, Float> soundVolumes = new ConcurrentHashMap<>();
     private boolean isDeafened;
-    private Field playingSounds;
     private SoundEngine soundEngine;
     private StunRingingSound ringing;
 
     private SoundHandler()
     {
-        this.initReflection();
     }
 
-    private void initReflection()
+    private SoundEngine getEngine()
     {
-        this.playingSounds = ObfuscationReflectionHelper.findField(SoundEngine.class, "f_120226_");
+        if(this.soundEngine == null)
+        {
+            this.soundEngine = ((SoundManager) Minecraft.getInstance().getSoundManager()).soundEngine;
+        }
+        return this.soundEngine;
     }
 
-    @SuppressWarnings("unchecked")
-    @SubscribeEvent
-    public void deafenPlayer(TickEvent.ClientTickEvent event)
+    public void register()
     {
-        if(event.phase == TickEvent.Phase.START || Minecraft.getInstance().player == null || this.soundEngine == null)
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> this.deafenPlayer());
+    }
+
+    public void deafenPlayer()
+    {
+        if(Minecraft.getInstance().player == null)
         {
             return;
         }
@@ -82,16 +97,8 @@ public class SoundHandler
             return; // Return after playing sound, as doing so in the tame tick that sounds are muted causes crashing in SoundManager#updateAllSounds
         }
 
-        // Access the sound manager's sound system and list of playing sounds
-        Map<SoundInstance, ChannelAccess.ChannelHandle> playingSounds;
-        try
-        {
-            playingSounds = (Map<SoundInstance, ChannelAccess.ChannelHandle>) this.playingSounds.get(this.soundEngine);
-        }
-        catch(IllegalArgumentException | IllegalAccessException e)
-        {
-            return;
-        }
+        // Access the sound manager's sound system and list of playing sounds (opened via access widener)
+        Map<SoundInstance, ChannelAccess.ChannelHandle> playingSounds = getEngine().instanceToChannel;
 
         if(effect != null)
         {
@@ -129,35 +136,34 @@ public class SoundHandler
                     entry1.execute(soundSource -> soundSource.setVolume(entry.getValue()));
                 }
             }
-            this.soundVolumes.clear();
         }
-
     }
 
-    @SubscribeEvent
-    public void lowerInitialVolume(PlaySoundEvent event)
+    /**
+     * Fabric replacement for the Forge PlaySoundEvent handler. Called from SoundEngineMixin
+     * before a sound is played; returns the (possibly wrapped) instance to play, or the
+     * original instance to keep vanilla behavior.
+     */
+    @Nullable
+    public SoundInstance onPlaySound(SoundInstance sound)
     {
-        if(this.soundEngine == null)
+        if(!this.isDeafened || Minecraft.getInstance().player == null || sound instanceof TickableSoundInstance)
         {
-            this.soundEngine = event.getEngine();
-        }
-
-        if(!this.isDeafened || Minecraft.getInstance().player == null || event.getSound() instanceof TickableSoundInstance)
-        {
-            return;
+            return sound;
         }
 
         // Exempt initial explosion from muting
-        ResourceLocation loc = event.getSound().getLocation();
+        ResourceLocation loc = sound.getLocation();
         MobEffectInstance effect = Minecraft.getInstance().player.getEffect(ModEffects.DEAFENED.get());
         int duration = effect != null ? effect.getDuration() : 0;
         boolean isStunGrenade = isStunGrenade(loc);
-        if(duration == 0 && isStunGrenade) return;
+        if(duration == 0 && isStunGrenade) return sound;
+        if(sound instanceof SoundMuted) return sound;
 
         // Reduce volume to full value when duration is above threshold
         // When below threshold, fade to original sound level as duration approaches 0
-        event.getSound().resolve(Minecraft.getInstance().getSoundManager());
-        event.setSound(new SoundMuted(event.getSound(), duration, isStunGrenade));
+        sound.resolve(Minecraft.getInstance().getSoundManager());
+        return new SoundMuted(sound, duration, isStunGrenade);
     }
 
     private boolean isStunGrenade(ResourceLocation loc)

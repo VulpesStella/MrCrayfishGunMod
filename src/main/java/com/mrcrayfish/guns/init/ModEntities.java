@@ -6,23 +6,25 @@ import com.mrcrayfish.guns.entity.MissileEntity;
 import com.mrcrayfish.guns.entity.ProjectileEntity;
 import com.mrcrayfish.guns.entity.ThrowableGrenadeEntity;
 import com.mrcrayfish.guns.entity.ThrowableStunGrenadeEntity;
+import com.mrcrayfish.guns.util.RegistryObject;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
+import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
 
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 /**
  * Author: MrCrayfish
  */
 public class ModEntities
 {
-    public static final DeferredRegister<EntityType<?>> REGISTER = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, Reference.MOD_ID);
-
     public static final RegistryObject<EntityType<ProjectileEntity>> PROJECTILE = registerProjectile("projectile", ProjectileEntity::new);
     public static final RegistryObject<EntityType<GrenadeEntity>> GRENADE = registerBasic("grenade", GrenadeEntity::new);
     public static final RegistryObject<EntityType<MissileEntity>> MISSILE = registerBasic("missile", MissileEntity::new);
@@ -31,13 +33,14 @@ public class ModEntities
 
     private static <T extends Entity> RegistryObject<EntityType<T>> registerBasic(String id, BiFunction<EntityType<T>, Level, T> function)
     {
-        return REGISTER.register(id, () -> EntityType.Builder.of(function::apply, MobCategory.MISC)
-                .sized(0.25F, 0.25F)
-                .setTrackingRange(100)
-                .setUpdateInterval(1)
-                .noSummon()
+        return register(id, () -> FabricEntityTypeBuilder.<T>create(MobCategory.MISC, function::apply)
+                .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
+                .trackRangeBlocks(100)
+                .trackedUpdateRate(1)
+                .forceTrackedVelocityUpdates(true)
+                .disableSummon()
                 .fireImmune()
-                .setShouldReceiveVelocityUpdates(true).build(id));
+                .build());
     }
 
     /**
@@ -47,6 +50,9 @@ public class ModEntities
      * in the world and are spawned many times a tick. There is no reason to send unnecessary packets
      * when it can be avoided to drastically improve the performance of the game.
      *
+     * TODO(T04): Forge used setCustomClientFactory here; the Fabric spawn-data strategy must
+     *  cover client-side projectile data (see plan.md T04 step 6-10).
+     *
      * @param id       the id of the projectile
      * @param function the factory to spawn the projectile for the server
      * @param <T>      an entity that is a projectile entity
@@ -54,13 +60,18 @@ public class ModEntities
      */
     private static <T extends ProjectileEntity> RegistryObject<EntityType<T>> registerProjectile(String id, BiFunction<EntityType<T>, Level, T> function)
     {
-        return REGISTER.register(id, () -> EntityType.Builder.of(function::apply, MobCategory.MISC)
-                .sized(0.25F, 0.25F)
-                .setTrackingRange(0)
-                .noSummon()
+        return register(id, () -> FabricEntityTypeBuilder.<T>create(MobCategory.MISC, function::apply)
+                .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
+                .trackRangeBlocks(0)
+                .trackedUpdateRate(1)
+                .forceTrackedVelocityUpdates(false)
+                .disableSummon()
                 .fireImmune()
-                .setShouldReceiveVelocityUpdates(false)
-                .setCustomClientFactory((spawnEntity, world) -> null)
-                .build(id));
+                .build());
+    }
+
+    private static <T extends Entity> RegistryObject<EntityType<T>> register(String id, Supplier<EntityType<T>> supplier)
+    {
+        return RegistryObject.of(Registry.register(BuiltInRegistries.ENTITY_TYPE, new ResourceLocation(Reference.MOD_ID, id), supplier.get()));
     }
 }

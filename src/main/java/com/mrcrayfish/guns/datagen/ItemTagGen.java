@@ -1,19 +1,17 @@
 package com.mrcrayfish.guns.datagen;
 
 import com.mrcrayfish.guns.Reference;
+import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.data.PackOutput;
-import net.minecraft.data.tags.ItemTagsProvider;
-import net.minecraft.world.level.block.Block;
-import net.minecraftforge.common.data.ExistingFileHelper;
 
 import java.util.concurrent.CompletableFuture;
 
-public class ItemTagGen extends ItemTagsProvider
+public class ItemTagGen extends FabricTagProvider.ItemTagProvider
 {
-    public ItemTagGen(PackOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider, CompletableFuture<TagLookup<Block>> blockTagProvider, ExistingFileHelper existingFileHelper)
+    public ItemTagGen(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookupProvider)
     {
-        super(output, lookupProvider, blockTagProvider, Reference.MOD_ID, existingFileHelper);
+        super(output, lookupProvider);
     }
 
     @Override

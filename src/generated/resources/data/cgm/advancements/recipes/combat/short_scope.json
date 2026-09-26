@@ -5,7 +5,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:gems/amethyst"
+            "items": [
+              "minecraft:amethyst_shard"
+            ]
           }
         ]
       },
@@ -15,7 +17,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/iron"
+            "items": [
+              "minecraft:iron_nugget"
+            ]
           }
         ]
       },
@@ -25,7 +29,7 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:dusts/redstone"
+            "tag": "c:redstone_dusts"
           }
         ]
       },
@@ -50,5 +54,6 @@
     "recipes": [
       "cgm:short_scope"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

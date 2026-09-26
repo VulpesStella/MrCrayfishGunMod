@@ -6,7 +6,6 @@ import com.mrcrayfish.guns.client.network.ClientPlayHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
-import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 

@@ -54,12 +54,9 @@ import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -70,7 +67,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnData
+public class ProjectileEntity extends Entity implements ISpawnDataEntity
 {
     private static final Predicate<Entity> PROJECTILE_TARGETS = input -> input != null && input.isPickable() && !input.isSpectator();
     private static final Predicate<BlockState> IGNORE_LEAVES = input -> input != null && Config.COMMON.gameplay.ignoreLeaves.get() && input.getBlock() instanceof LeavesBlock;
@@ -117,7 +114,7 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
         double posZ = shooter.zOld + (shooter.getZ() - shooter.zOld) / 2.0;
         this.setPos(posX, posY, posZ);
 
-        Item ammo = ForgeRegistries.ITEMS.getValue(this.projectile.getItem());
+        Item ammo = BuiltInRegistries.ITEM.get(this.projectile.getItem());
         if(ammo != null)
         {
             int customModelData = -1;
@@ -262,7 +259,7 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
             }
         }
 
-        if (Config.COMMON.gameplay.projectileSlowDownInFluids.get() && this.isInFluidType()) {
+        if (Config.COMMON.gameplay.projectileSlowDownInFluids.get() && this.isInWater()) { // TODO(T08): Forge checked any fluid
             Vec3 delta = this.getDeltaMovement();
             double dx = delta.x;
             double dy = delta.y;
@@ -422,7 +419,7 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
 
     private void onHit(HitResult result, Vec3 startVec, Vec3 endVec)
     {
-        if(MinecraftForge.EVENT_BUS.post(new GunProjectileHitEvent(result, this)))
+        if(GunProjectileHitEvent.fire(result, this))
         {
             return;
         }
@@ -670,13 +667,17 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
         return true;
     }
 
+    // Fabric port: Forge's onRemovedFromWorld hook does not exist on vanilla Entity;
+    // the removal broadcast now rides on remove(RemovalReason), covering the same
+    // cases (kill, discard, chunk unload).
     @Override
-    public void onRemovedFromWorld()
+    public void remove(RemovalReason reason)
     {
         if(!this.level().isClientSide)
         {
             PacketHandler.getPlayChannel().sendToNearbyPlayers(this::getDeathTargetPoint, new S2CMessageRemoveProjectile(this.getId()));
         }
+        super.remove(reason);
     }
 
     private LevelLocation getDeathTargetPoint()
@@ -687,7 +688,7 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
     @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket()
     {
-        return NetworkHooks.getEntitySpawningPacket(this);
+        return super.getAddEntityPacket();
     }
 
     /**
@@ -813,8 +814,8 @@ public class ProjectileEntity extends Entity implements IEntityAdditionalSpawnDa
         Explosion.BlockInteraction mode = breakTerrain ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.KEEP;
         Explosion explosion = new ProjectileExplosion(world, entity, source, null, entity.getX(), entity.getY(), entity.getZ(), radius, false, mode);
 
-        if(net.minecraftforge.event.ForgeEventFactory.onExplosionStart(world, explosion))
-            return;
+        // TODO(T08): Forge fired an explosion-start hook here (cancellable); Fabric 1.20.1
+        // has no equivalent - explosion cancellability is re-verified in T08.
 
         // Do explosion logic
         explosion.explode();

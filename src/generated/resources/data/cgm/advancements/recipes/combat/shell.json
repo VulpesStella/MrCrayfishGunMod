@@ -17,7 +17,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:nuggets/gold"
+            "items": [
+              "minecraft:gold_nugget"
+            ]
           }
         ]
       },
@@ -27,7 +29,9 @@
       "conditions": {
         "items": [
           {
-            "tag": "forge:gunpowder"
+            "items": [
+              "minecraft:gunpowder"
+            ]
           }
         ]
       },
@@ -52,5 +56,6 @@
     "recipes": [
       "cgm:shell"
     ]
-  }
+  },
+  "sends_telemetry_event": true
 }

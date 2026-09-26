@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
-import com.mrcrayfish.guns.GunMod;
+import com.mrcrayfish.guns.FabricGunMod;
 import com.mrcrayfish.guns.Reference;
 import com.mrcrayfish.guns.annotation.Validator;
 import net.minecraft.Util;
@@ -14,9 +14,12 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.minecraft.server.packs.PackType;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
 import java.io.InvalidObjectException;
@@ -26,7 +29,6 @@ import java.util.Map;
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID)
 public class CustomGunLoader extends SimpleJsonResourceReloadListener
 {
     private static final Gson GSON_INSTANCE = Util.make(() -> {
@@ -61,12 +63,12 @@ public class CustomGunLoader extends SimpleJsonResourceReloadListener
                 }
                 else
                 {
-                    GunMod.LOGGER.error("Couldn't load data file {} as it is missing or malformed", resourceLocation);
+                    FabricGunMod.LOGGER.error("Couldn't load data file {} as it is missing or malformed", resourceLocation);
                 }
             }
             catch(InvalidObjectException e)
             {
-                GunMod.LOGGER.error("Missing required properties for {}", resourceLocation);
+                FabricGunMod.LOGGER.error("Missing required properties for {}", resourceLocation);
                 e.printStackTrace();
             }
             catch(IllegalAccessException e)
@@ -115,12 +117,28 @@ public class CustomGunLoader extends SimpleJsonResourceReloadListener
         return ImmutableMap.of();
     }
 
-    @SubscribeEvent
-    public static void addReloadListenerEvent(AddReloadListenerEvent event)
+    /**
+     * Fabric port: fresh CustomGunLoader per data reload, mirroring the baseline
+     * AddReloadListenerEvent behavior.
+     */
+    public static void register()
     {
-        CustomGunLoader customGunLoader = new CustomGunLoader();
-        event.addListener(customGunLoader);
-        CustomGunLoader.instance = customGunLoader;
+        ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(new IdentifiableResourceReloadListener()
+        {
+            @Override
+            public ResourceLocation getFabricId()
+            {
+                return new ResourceLocation(Reference.MOD_ID, "custom_gun_loader");
+            }
+
+            @Override
+            public CompletableFuture<Void> reload(PreparationBarrier preparationBarrier, ResourceManager resourceManager, ProfilerFiller prepareProfiler, ProfilerFiller applyProfiler, Executor prepareExecutor, Executor applyExecutor)
+            {
+                CustomGunLoader customGunLoader = new CustomGunLoader();
+                CustomGunLoader.instance = customGunLoader;
+                return customGunLoader.reload(preparationBarrier, resourceManager, prepareProfiler, applyProfiler, prepareExecutor, applyExecutor);
+            }
+        });
     }
 
     @Nullable

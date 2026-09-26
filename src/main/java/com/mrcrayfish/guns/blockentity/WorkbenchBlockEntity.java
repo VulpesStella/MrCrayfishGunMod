@@ -1,6 +1,9 @@
 package com.mrcrayfish.guns.blockentity;
 
 import com.mrcrayfish.guns.blockentity.inventory.IStorageBlock;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import com.mrcrayfish.guns.common.container.WorkbenchContainer;
 import com.mrcrayfish.guns.init.ModTileEntities;
 import net.minecraft.core.BlockPos;
@@ -20,7 +23,7 @@ import javax.annotation.Nullable;
 /**
  * Author: MrCrayfish
  */
-public class WorkbenchBlockEntity extends SyncedBlockEntity implements IStorageBlock
+public class WorkbenchBlockEntity extends SyncedBlockEntity implements IStorageBlock, ExtendedScreenHandlerFactory
 {
     private NonNullList<ItemStack> inventory = NonNullList.withSize(1, ItemStack.EMPTY);
 
@@ -58,6 +61,12 @@ public class WorkbenchBlockEntity extends SyncedBlockEntity implements IStorageB
     public boolean stillValid(Player player)
     {
         return this.level.getBlockEntity(this.worldPosition) == this && player.distanceToSqr(this.worldPosition.getX() + 0.5, this.worldPosition.getY() + 0.5, this.worldPosition.getZ() + 0.5) <= 64.0;
+    }
+
+    @Override
+    public void writeScreenOpeningData(ServerPlayer serverPlayer, FriendlyByteBuf buf)
+    {
+        buf.writeBlockPos(this.worldPosition);
     }
 
     @Override

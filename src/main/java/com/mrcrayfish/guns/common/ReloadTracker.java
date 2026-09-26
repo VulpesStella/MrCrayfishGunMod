@@ -13,11 +13,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.player.Player;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -26,7 +25,6 @@ import java.util.WeakHashMap;
  * Author: MrCrayfish
  */
 @SuppressWarnings("unused")
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID)
 public class ReloadTracker
 {
     private static final Map<Player, ReloadTracker> RELOAD_TRACKER_MAP = new WeakHashMap<>();
@@ -66,7 +64,7 @@ public class ReloadTracker
 
     private boolean hasNoAmmo(Player player)
     {
-        return Gun.findAmmo(player, this.gun.getProjectile().getItem()).stack().isEmpty();
+        return Gun.findAmmo(player, this.gun.getProjectile().getItem()).isEmpty();
     }
 
     private boolean canReload(Player player)
@@ -79,20 +77,19 @@ public class ReloadTracker
     private void increaseAmmo(Player player)
     {
         AmmoContext context = Gun.findAmmo(player, this.gun.getProjectile().getItem());
-        ItemStack ammo = context.stack();
-        if(!ammo.isEmpty())
+        if(!context.isEmpty())
         {
-            int amount = Math.min(ammo.getCount(), this.gun.getGeneral().getReloadAmount());
             CompoundTag tag = this.stack.getTag();
             if(tag != null)
             {
                 int maxAmmo = GunEnchantmentHelper.getAmmoCapacity(this.stack, this.gun);
-                amount = Math.min(amount, maxAmmo - tag.getInt("AmmoCount"));
-                tag.putInt("AmmoCount", tag.getInt("AmmoCount") + amount);
+                int room = maxAmmo - tag.getInt("AmmoCount");
+                int credited = consumeAmmo(context, this.gun.getGeneral().getReloadAmount(), room);
+                if(credited > 0)
+                {
+                    tag.putInt("AmmoCount", tag.getInt("AmmoCount") + credited);
+                }
             }
-            ammo.shrink(amount);
-            // Trigger the post action on ammo consumption, like Container#setChanged.
-            context.onConsume().accept(ammo);
         }
 
         ResourceLocation reloadSound = this.gun.getSounds().getReload();
@@ -107,12 +104,33 @@ public class ReloadTracker
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event)
+    /**
+     * Removes ammo from the selected source and reports how much the gun may be credited.
+     *
+     * <p>The request is truncated by the source's current count, the gun's reload amount
+     * and the gun's remaining capacity. The gun is credited with exactly what the source
+     * reports as removed, so a refusing, short or disconnected source can never fill the
+     * gun. Kept separate from {@link #increaseAmmo(Player)} so the
+     * "credited == actually removed" invariant is directly testable.
+     *
+     * @return the amount credited, between 0 and the truncated request
+     */
+    static int consumeAmmo(AmmoContext context, int reloadAmount, int room)
     {
-        if(event.phase == TickEvent.Phase.START && !event.player.level().isClientSide)
+        int requested = Math.max(0, Math.min(Math.min(context.stack().getCount(), reloadAmount), room));
+        return context.extract(requested);
+    }
+
+    /**
+     * Fabric port: registered from FabricGunMod. Iterating the player list inside
+     * START_SERVER_TICK preserves per-player-per-tick semantics with Phase.START timing.
+     */
+    public static void onPlayerTick(MinecraftServer server)
+    {
+        for(Player player : server.getPlayerList().getPlayers())
         {
-            Player player = event.player;
+            if(player.level().isClientSide)
+                continue;
             if(ModSyncedDataKeys.RELOADING.getValue(player))
             {
                 if(!RELOAD_TRACKER_MAP.containsKey(player))
@@ -120,7 +138,7 @@ public class ReloadTracker
                     if(!(player.getInventory().getSelected().getItem() instanceof GunItem))
                     {
                         ModSyncedDataKeys.RELOADING.setValue(player, false);
-                        return;
+                        continue;
                     }
                     RELOAD_TRACKER_MAP.put(player, new ReloadTracker(player));
                 }
@@ -129,7 +147,7 @@ public class ReloadTracker
                 {
                     RELOAD_TRACKER_MAP.remove(player);
                     ModSyncedDataKeys.RELOADING.setValue(player, false);
-                    return;
+                    continue;
                 }
                 if(tracker.canReload(player))
                 {
@@ -164,13 +182,12 @@ public class ReloadTracker
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerTick(PlayerEvent.PlayerLoggedOutEvent event)
+    public static void register()
     {
-        MinecraftServer server = event.getEntity().getServer();
-        if(server != null)
-        {
-            server.execute(() -> RELOAD_TRACKER_MAP.remove(event.getEntity()));
-        }
+        ServerTickEvents.START_SERVER_TICK.register(ReloadTracker::onPlayerTick);
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayer player = handler.player;
+            server.execute(() -> RELOAD_TRACKER_MAP.remove(player));
+        });
     }
 }

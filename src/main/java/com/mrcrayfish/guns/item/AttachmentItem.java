@@ -3,8 +3,8 @@ package com.mrcrayfish.guns.item;
 import com.mrcrayfish.guns.client.handler.GunRenderingHandler;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
 
 /**
  * Author: MrCrayfish
@@ -20,7 +20,7 @@ public class AttachmentItem extends Item implements IMeta
     @Override
     public boolean isFoil(ItemStack stack)
     {
-        if(FMLEnvironment.dist == Dist.CLIENT)
+        if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT)
         {
             ItemStack weapon = GunRenderingHandler.get().getRenderingWeapon();
             if(weapon != null)

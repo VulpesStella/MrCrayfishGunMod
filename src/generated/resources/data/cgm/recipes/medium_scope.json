@@ -3,15 +3,15 @@
   "materials": [
     {
       "count": 4,
-      "tag": "forge:nuggets/iron"
+      "item": "minecraft:iron_nugget"
     },
     {
       "count": 1,
-      "tag": "forge:gems/amethyst"
+      "item": "minecraft:amethyst_shard"
     },
     {
       "count": 4,
-      "tag": "forge:dusts/redstone"
+      "tag": "c:redstone_dusts"
     }
   ],
   "result": {

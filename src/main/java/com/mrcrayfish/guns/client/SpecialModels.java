@@ -4,15 +4,10 @@ import com.mrcrayfish.guns.Reference;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ModelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 /**
  * Author: MrCrayfish
  */
-@Mod.EventBusSubscriber(modid = Reference.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public enum SpecialModels
 {
     ASSAULT_RIFLE("gun/assault_rifle"),
@@ -63,24 +58,19 @@ public enum SpecialModels
     }
 
     /**
-     * Registers the special models into the Forge Model Bakery. This is only called once on the
-     * load of the game.
+     * Fabric port of the Forge ModelEvent handlers: extra models are registered through a
+     * ModelLoadingPlugin (see FabricClientSetup) and the cached BakedModel is invalidated
+     * after every bake so resource reloads rebuild it on demand.
      */
-    @SubscribeEvent
-    public static void registerAdditional(ModelEvent.RegisterAdditional event)
+    public static void registerAdditional(net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin.Context context)
     {
         for(SpecialModels model : values())
         {
-            event.register(model.modelLocation);
+            context.addModels(model.modelLocation);
         }
     }
 
-    /**
-     * Clears the cached BakedModel since it's been rebuilt. This is needed since the models may
-     * have changed when a resource pack was applied, or if resources are reloaded.
-     */
-    @SubscribeEvent
-    public static void onBake(ModelEvent.BakingCompleted event)
+    public static void onBake()
     {
         for(SpecialModels model : values())
         {

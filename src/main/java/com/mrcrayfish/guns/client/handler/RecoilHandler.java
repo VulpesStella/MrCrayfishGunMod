@@ -9,10 +9,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemCooldowns;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.client.event.RenderHandEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.Random;
 
@@ -41,7 +37,6 @@ public class RecoilHandler
 
     private RecoilHandler() {}
 
-    @SubscribeEvent
     public void onGunFire(GunFireEvent.Post event)
     {
         if(!event.isClient())
@@ -60,10 +55,9 @@ public class RecoilHandler
         this.gunRecoilRandom = random.nextFloat();
     }
 
-    @SubscribeEvent
-    public void onRenderTick(TickEvent.RenderTickEvent event)
+    public void onRenderTick()
     {
-        if(event.phase != TickEvent.Phase.END || this.cameraRecoil <= 0)
+        if(this.cameraRecoil <= 0)
             return;
 
         Minecraft mc = Minecraft.getInstance();
@@ -96,19 +90,18 @@ public class RecoilHandler
         }
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public void onRenderOverlay(RenderHandEvent event)
+    /**
+     * Fabric port of the Forge RenderHandEvent handler (HIGHEST priority). Called from
+     * ItemInHandRendererMixin before GunRenderingHandler.onRenderHand.
+     */
+    public void onRenderHandCooldown(ItemStack heldItem, float frameTime)
     {
-        if(event.getHand() != InteractionHand.MAIN_HAND)
-            return;
-
-        ItemStack heldItem = event.getItemStack();
         if(!(heldItem.getItem() instanceof GunItem gunItem))
             return;
 
         Gun modifiedGun = gunItem.getModifiedGun(heldItem);
         ItemCooldowns tracker = Minecraft.getInstance().player.getCooldowns();
-        float cooldown = tracker.getCooldownPercent(gunItem, Minecraft.getInstance().getFrameTime());
+        float cooldown = tracker.getCooldownPercent(gunItem, frameTime);
         cooldown = cooldown >= modifiedGun.getGeneral().getRecoilDurationOffset() ? (cooldown - modifiedGun.getGeneral().getRecoilDurationOffset()) / (1.0F - modifiedGun.getGeneral().getRecoilDurationOffset()) : 0.0F;
         if(cooldown >= 0.8)
         {
@@ -122,6 +115,11 @@ public class RecoilHandler
         }
 
         this.gunRecoilAngle = modifiedGun.getGeneral().getRecoilAngle();
+    }
+
+    public void register()
+    {
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.START.register(context -> this.onRenderTick());
     }
 
     public double getAdsRecoilReduction(Gun gun)

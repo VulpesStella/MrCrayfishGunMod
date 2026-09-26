@@ -1,27 +1,23 @@
 package com.mrcrayfish.guns.client;
 
-import com.mrcrayfish.controllable.client.binding.IBindingContext;
 import com.mrcrayfish.guns.item.GunItem;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.client.settings.KeyConflictContext;
 
 /**
+ * Fabric port: Forge KeyConflictContext/Controllable IBindingContext have no Fabric
+ * equivalent; the context is only consumed by CGM's own key handling.
+ * TODO(T11): controller bindings evaluate this context through the Controllable hook.
+ *
  * Author: MrCrayfish
  */
-public enum GunConflictContext implements IBindingContext
+public enum GunConflictContext
 {
     IN_GAME_HOLDING_WEAPON
     {
-        @Override
         public boolean isActive()
         {
-            return !KeyConflictContext.GUI.isActive() && Minecraft.getInstance().player != null && Minecraft.getInstance().player.getMainHandItem().getItem() instanceof GunItem;
-        }
-
-        @Override
-        public boolean conflicts(IBindingContext other)
-        {
-            return this == other;
+            Minecraft mc = Minecraft.getInstance();
+            return mc.screen == null && mc.player != null && mc.player.getMainHandItem().getItem() instanceof GunItem;
         }
     }
 }

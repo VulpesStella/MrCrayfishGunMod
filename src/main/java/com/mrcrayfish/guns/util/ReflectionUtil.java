@@ -5,27 +5,15 @@ import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.TargetBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
-
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 
 /**
- * Author: MrCrayfish
+ * Fabric port: TargetBlock#updateRedstoneOutput is opened via cgm.accesswidener
+ * (baseline used SRG reflection m_57391_).
  */
 public class ReflectionUtil
 {
-    private static final Method updateRedstoneOutputMethod = ObfuscationReflectionHelper.findMethod(TargetBlock.class, "m_57391_", LevelAccessor.class, BlockState.class, BlockHitResult.class, Entity.class);
-
-    public static int updateTargetBlock(TargetBlock block, LevelAccessor accessor, BlockState state, BlockHitResult result, Entity entity)
+    public static int updateTargetBlock(TargetBlock block, LevelAccessor level, BlockState state, BlockHitResult hitResult, Entity entity)
     {
-        try
-        {
-            return (int) updateRedstoneOutputMethod.invoke(block, accessor, state, result, entity);
-        }
-        catch(IllegalAccessException | InvocationTargetException ignored)
-        {
-            return 0;
-        }
+        return TargetBlock.updateRedstoneOutput(level, state, hitResult, entity);
     }
 }
